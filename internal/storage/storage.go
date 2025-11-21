@@ -23,6 +23,10 @@ type Storage interface {
 	GetStartDate() (int, error)
 	UpdateStartDate(startDate int) error
 
+	// AI Config
+	GetAIConfig() (*AIConfig, error)
+	UpdateAIConfig(aiConfig AIConfig) error
+
 	// Recurring Expenses
 	GetRecurringExpenses() ([]RecurringExpense, error)
 	GetRecurringExpense(id string) (RecurringExpense, error)
@@ -50,7 +54,16 @@ type Config struct {
 	Currency          string             `json:"currency"`
 	StartDate         int                `json:"startDate"`
 	RecurringExpenses []RecurringExpense `json:"recurringExpenses"`
+	AIConfig          AIConfig           `json:"aiConfig"`
 	// Tags              []string           `json:"tags"`
+}
+
+// AIConfig stores AI provider configuration
+type AIConfig struct {
+	Enabled  bool   `json:"enabled"`
+	Provider string `json:"provider"` // gemini, anthropic, openai
+	APIKey   string `json:"apiKey"`   // Stored encrypted or use external secrets
+	Model    string `json:"model"`    // Optional: provider-specific model
 }
 
 type RecurringExpense struct {
@@ -99,6 +112,12 @@ func (c *Config) SetBaseConfig() {
 	c.StartDate = 1
 	// c.Tags = []string{}
 	c.RecurringExpenses = []RecurringExpense{}
+	c.AIConfig = AIConfig{
+		Enabled:  false,
+		Provider: "gemini",
+		APIKey:   "",
+		Model:    "gemini-1.5-flash",
+	}
 }
 
 func (c *SystemConfig) SetStorageConfig() {

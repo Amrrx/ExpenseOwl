@@ -197,6 +197,25 @@ func (s *jsonStore) UpdateStartDate(startDate int) error {
 	return s.writeConfigFile(s.configPath, data)
 }
 
+func (s *jsonStore) GetAIConfig() (*AIConfig, error) {
+	config, err := s.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+	return &config.AIConfig, nil
+}
+
+func (s *jsonStore) UpdateAIConfig(aiConfig AIConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data, err := s.readConfigFile(s.configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %v", err)
+	}
+	data.AIConfig = aiConfig
+	return s.writeConfigFile(s.configPath, data)
+}
+
 func (s *jsonStore) GetRecurringExpenses() ([]RecurringExpense, error) {
 	config, err := s.GetConfig()
 	if err != nil {

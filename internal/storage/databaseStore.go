@@ -50,7 +50,11 @@ const (
 		id VARCHAR(255) PRIMARY KEY DEFAULT 'default',
 		categories TEXT NOT NULL,
 		currency VARCHAR(255) NOT NULL,
-		start_date INTEGER NOT NULL
+		start_date INTEGER NOT NULL,
+		ai_enabled BOOLEAN DEFAULT FALSE,
+		ai_provider VARCHAR(50) DEFAULT 'gemini',
+		ai_api_key TEXT DEFAULT '',
+		ai_model VARCHAR(100) DEFAULT 'gemini-1.5-flash'
 	);`
 )
 
@@ -94,14 +98,19 @@ func (s *databaseStore) saveConfig(config *Config) error {
 		return fmt.Errorf("failed to marshal categories: %v", err)
 	}
 	query := `
-		INSERT INTO config (id, categories, currency, start_date)
-		VALUES ('default', $1, $2, $3)
+		INSERT INTO config (id, categories, currency, start_date, ai_enabled, ai_provider, ai_api_key, ai_model)
+		VALUES ('default', $1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (id) DO UPDATE SET
 			categories = EXCLUDED.categories,
 			currency = EXCLUDED.currency,
-			start_date = EXCLUDED.start_date;
+			start_date = EXCLUDED.start_date,
+			ai_enabled = EXCLUDED.ai_enabled,
+			ai_provider = EXCLUDED.ai_provider,
+			ai_api_key = EXCLUDED.ai_api_key,
+			ai_model = EXCLUDED.ai_model;
 	`
-	_, err = s.db.Exec(query, string(categoriesJSON), config.Currency, config.StartDate)
+	_, err = s.db.Exec(query, string(categoriesJSON), config.Currency, config.StartDate,
+		config.AIConfig.Enabled, config.AIConfig.Provider, config.AIConfig.APIKey, config.AIConfig.Model)
 	s.defaults["currency"] = config.Currency
 	s.defaults["start_date"] = fmt.Sprintf("%d", config.StartDate)
 	return err
@@ -119,10 +128,12 @@ func (s *databaseStore) updateConfig(updater func(c *Config) error) error {
 }
 
 func (s *databaseStore) GetConfig() (*Config, error) {
-	query := `SELECT categories, currency, start_date FROM config WHERE id = 'default'`
+	query := `SELECT categories, currency, start_date, ai_enabled, ai_provider, ai_api_key, ai_model FROM config WHERE id = 'default'`
 	var categoriesStr, currency string
 	var startDate int
-	err := s.db.QueryRow(query).Scan(&categoriesStr, &currency, &startDate)
+	var aiEnabled sql.NullBool
+	var aiProvider, aiAPIKey, aiModel sql.NullString
+	err := s.db.QueryRow(query).Scan(&categoriesStr, &currency, &startDate, &aiEnabled, &aiProvider, &aiAPIKey, &aiModel)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -141,6 +152,23 @@ func (s *databaseStore) GetConfig() (*Config, error) {
 	config.StartDate = startDate
 	if err := json.Unmarshal([]byte(categoriesStr), &config.Categories); err != nil {
 		return nil, fmt.Errorf("failed to parse categories from db: %v", err)
+	}
+
+	// Set AI config with defaults if null
+	config.AIConfig = AIConfig{
+		Enabled:  aiEnabled.Valid && aiEnabled.Bool,
+		Provider: "gemini",
+		APIKey:   "",
+		Model:    "gemini-1.5-flash",
+	}
+	if aiProvider.Valid {
+		config.AIConfig.Provider = aiProvider.String
+	}
+	if aiAPIKey.Valid {
+		config.AIConfig.APIKey = aiAPIKey.String
+	}
+	if aiModel.Valid {
+		config.AIConfig.Model = aiModel.String
 	}
 
 	recurring, err := s.GetRecurringExpenses()
@@ -199,6 +227,21 @@ func (s *databaseStore) UpdateStartDate(startDate int) error {
 	}
 	return s.updateConfig(func(c *Config) error {
 		c.StartDate = startDate
+		return nil
+	})
+}
+
+func (s *databaseStore) GetAIConfig() (*AIConfig, error) {
+	config, err := s.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+	return &config.AIConfig, nil
+}
+
+func (s *databaseStore) UpdateAIConfig(aiConfig AIConfig) error {
+	return s.updateConfig(func(c *Config) error {
+		c.AIConfig = aiConfig
 		return nil
 	})
 }
