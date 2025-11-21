@@ -873,3 +873,336 @@ header {
 .table-controls label:hover {
     background-color: var(--accent);
 }
+
+/* Voice Recording Button */
+.voice-button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin-left: 1rem;
+}
+
+.voice-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.voice-button.recording {
+    background: #dc3545;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+    }
+}
+
+.voice-status {
+    text-align: center;
+    color: var(--accent);
+    font-size: 0.9rem;
+    min-height: 1.5rem;
+    margin-top: 0.5rem;
+}
+
+/* Voice Review Modal */
+.voice-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.voice-modal-content {
+    background-color: var(--bg-primary);
+    padding: 2rem;
+    border-radius: 12px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.voice-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 1rem;
+}
+
+.voice-modal-header h2 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.close-modal {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: color 0.2s;
+}
+
+.close-modal:hover {
+    color: var(--accent);
+}
+
+.voice-transcript {
+    background-color: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+.review-expense-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.no-expenses {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 2rem;
+}
+
+.expense-review-card {
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    transition: all 0.2s;
+}
+
+.expense-review-card.low-confidence {
+    border-color: #ffc107;
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+.expense-review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.expense-name-input {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.delete-expense-btn {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.delete-expense-btn:hover {
+    background: #c82333;
+}
+
+.expense-review-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.expense-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.expense-field label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.expense-amount-input,
+.expense-category-select,
+.expense-date-input {
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.confidence-warning {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #ffc107;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background-color: rgba(255, 193, 7, 0.1);
+    border-radius: 4px;
+}
+
+.voice-modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+}
+
+.modal-btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.modal-btn.primary {
+    background-color: var(--accent);
+    color: white;
+}
+
+.modal-btn.primary:hover {
+    background-color: var(--accent-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.modal-btn.secondary {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+.modal-btn.secondary:hover {
+    background-color: var(--bg-tertiary);
+}
+
+/* AI Configuration Styles */
+.ai-config-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.ai-config-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+}
+
+.ai-info-box {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.ai-info-box h4 {
+    color: var(--accent);
+    margin-top: 0;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ai-info-box ol {
+    margin: 1rem 0;
+    padding-left: 1.5rem;
+}
+
+.ai-info-box li {
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+}
+
+.ai-info-box p {
+    color: var(--text-secondary);
+    margin: 0.5rem 0;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .voice-modal-content {
+        width: 95%;
+        padding: 1rem;
+        max-height: 90vh;
+    }
+
+    .voice-button {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2rem;
+    }
+
+    .modal-btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .voice-modal-actions {
+        flex-direction: column;
+    }
+
+    .ai-config-actions {
+        flex-direction: column;
+    }
+}

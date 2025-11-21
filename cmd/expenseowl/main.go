@@ -87,6 +87,12 @@ func runServer(port int) {
 	http.HandleFunc("/import/csv", handler.ImportCSV)
 	http.HandleFunc("/import/csvold", handler.ImportOldCSV)
 
+	// Voice & AI
+	http.HandleFunc("/voice/parse", handler.ParseVoiceExpense)     // POST voice to get parsed expenses
+	http.HandleFunc("/settings/ai", handler.GetAIConfig)           // GET AI config
+	http.HandleFunc("/settings/ai/update", handler.UpdateAIConfig) // PUT AI config
+	http.HandleFunc("/settings/ai/test", handler.TestAIConnection) // POST test AI connection
+
 	log.Println("Starting server on port", port, "...")
 	if err := http.ListenAndServe(fmt.Sprint(":", port), nil); err != nil {
 		log.Fatalf("Server failed to start: %v", err)

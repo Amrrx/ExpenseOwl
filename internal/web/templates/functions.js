@@ -6,6 +6,7 @@ const colorPalette = [
 const currencyBehaviors = {
     usd: {symbol: "$", useComma: false, useDecimals: true, useSpace: false, right: false},
     eur: {symbol: "€", useComma: true, useDecimals: true, useSpace: false, right: false},
+    egp: {symbol: "E£", useComma: false, useDecimals: true, useSpace: true, right: false},
     gbp: {symbol: "£", useComma: false, useDecimals: true, useSpace: false, right: false},
     jpy: {symbol: "¥", useComma: false, useDecimals: false, useSpace: false, right: false},
     cny: {symbol: "¥", useComma: false, useDecimals: true, useSpace: false, right: false},
@@ -152,3 +153,287 @@ function escapeHTML(str) {
         }[tag] || tag)
     );
 }
+
+// ============================================================
+// Voice Recording & AI Parsing
+// ============================================================
+
+let mediaRecorder;
+let audioChunks = [];
+let recordingTimeout;
+const MAX_RECORDING_TIME = 15000; // 15 seconds
+let currentCategories = [];
+
+async function startVoiceRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                audioChunks.push(event.data);
+            }
+        };
+
+        mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            await sendAudioForParsing(audioBlob);
+            stream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorder.start();
+
+        // Auto-stop after 15 seconds
+        recordingTimeout = setTimeout(() => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopVoiceRecording();
+            }
+        }, MAX_RECORDING_TIME);
+
+        updateVoiceUI('recording');
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        alert('Could not access microphone. Please check permissions.');
+    }
+}
+
+function stopVoiceRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        clearTimeout(recordingTimeout);
+        mediaRecorder.stop();
+        updateVoiceUI('processing');
+    }
+}
+
+async function sendAudioForParsing(audioBlob) {
+    try {
+        // Convert blob to base64
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+
+        reader.onloadend = async () => {
+            try {
+                const base64Audio = reader.result;
+
+                const response = await fetch('/voice/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ audioData: base64Audio })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to parse audio');
+                }
+
+                const result = await response.json();
+                showReviewScreen(result);
+            } catch (error) {
+                console.error('Error parsing audio:', error);
+                alert('Failed to parse voice input: ' + error.message);
+                updateVoiceUI('idle');
+            }
+        };
+    } catch (error) {
+        console.error('Error processing audio:', error);
+        alert('Failed to process audio: ' + error.message);
+        updateVoiceUI('idle');
+    }
+}
+
+function updateVoiceUI(state) {
+    const voiceButton = document.getElementById('voiceButton');
+    const voiceStatus = document.getElementById('voiceStatus');
+
+    if (!voiceButton) return;
+
+    switch (state) {
+        case 'recording':
+            voiceButton.classList.add('recording');
+            voiceButton.innerHTML = '<i class="fas fa-stop-circle"></i>';
+            if (voiceStatus) voiceStatus.textContent = 'Recording... (tap to stop)';
+            voiceButton.onclick = stopVoiceRecording;
+            break;
+        case 'processing':
+            voiceButton.classList.remove('recording');
+            voiceButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            if (voiceStatus) voiceStatus.textContent = 'Processing...';
+            voiceButton.onclick = null;
+            break;
+        case 'idle':
+        default:
+            voiceButton.classList.remove('recording');
+            voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
+            if (voiceStatus) voiceStatus.textContent = '';
+            voiceButton.onclick = startVoiceRecording;
+            break;
+    }
+}
+
+function showReviewScreen(parseResult) {
+    const reviewModal = document.getElementById('voiceReviewModal');
+    const reviewList = document.getElementById('reviewExpenseList');
+    const transcript = document.getElementById('voiceTranscript');
+
+    if (!reviewModal) return;
+
+    // Show transcript
+    if (transcript && parseResult.transcript) {
+        transcript.textContent = '"' + parseResult.transcript + '"';
+    }
+
+    // Clear previous results
+    reviewList.innerHTML = '';
+
+    if (!parseResult.expenses || parseResult.expenses.length === 0) {
+        reviewList.innerHTML = '<p class="no-expenses">No expenses detected in audio.</p>';
+    } else {
+        // Create expense cards
+        parseResult.expenses.forEach((expense, index) => {
+            const card = createExpenseReviewCard(expense, index);
+            reviewList.appendChild(card);
+        });
+    }
+
+    // Show modal
+    reviewModal.style.display = 'flex';
+    updateVoiceUI('idle');
+}
+
+function createExpenseReviewCard(expense, index) {
+    const card = document.createElement('div');
+    card.className = 'expense-review-card';
+    if (expense.confidence < 0.7 || expense.ambiguous) {
+        card.classList.add('low-confidence');
+    }
+
+    const categoryOptions = currentCategories.map(cat =>
+        '<option value="' + cat + '"' + (cat === expense.category ? ' selected' : '') + '>' + cat + '</option>'
+    ).join('');
+
+    card.innerHTML = `
+        <div class="expense-review-header">
+            <input type="text" class="expense-name-input" value="${escapeHTML(expense.name)}" data-index="${index}" />
+            <button class="delete-expense-btn" onclick="removeExpenseCard(${index})">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="expense-review-body">
+            <div class="expense-field">
+                <label>Amount:</label>
+                <input type="number" step="0.01" class="expense-amount-input" value="${expense.amount}" data-index="${index}" />
+            </div>
+            <div class="expense-field">
+                <label>Category:</label>
+                <select class="expense-category-select" data-index="${index}">
+                    ${categoryOptions}
+                </select>
+            </div>
+            <div class="expense-field">
+                <label>Date:</label>
+                <input type="date" class="expense-date-input" value="${expense.date.split('T')[0]}" data-index="${index}" />
+            </div>
+            ${expense.confidence < 0.7 || expense.ambiguous ?
+                '<div class="confidence-warning"><i class="fas fa-exclamation-triangle"></i> Low confidence - please review</div>' :
+                ''}
+        </div>
+    `;
+
+    return card;
+}
+
+function removeExpenseCard(index) {
+    const card = document.querySelector('.expense-review-card:nth-child(' + (index + 1) + ')');
+    if (card) {
+        card.remove();
+    }
+}
+
+async function confirmAllExpenses() {
+    const cards = document.querySelectorAll('.expense-review-card');
+    const expenses = [];
+
+    cards.forEach(card => {
+        const index = card.querySelector('.expense-name-input').dataset.index;
+        const name = card.querySelector('.expense-name-input').value;
+        const amount = parseFloat(card.querySelector('.expense-amount-input').value);
+        const category = card.querySelector('.expense-category-select').value;
+        const date = card.querySelector('.expense-date-input').value;
+
+        expenses.push({
+            name,
+            amount,
+            category,
+            date: getISODateWithLocalTime(date),
+            tags: []
+        });
+    });
+
+    // Add each expense
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const expense of expenses) {
+        try {
+            const response = await fetch('/expense', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(expense)
+            });
+
+            if (response.ok) {
+                successCount++;
+            } else {
+                failCount++;
+            }
+        } catch (error) {
+            console.error('Error adding expense:', error);
+            failCount++;
+        }
+    }
+
+    closeReviewModal();
+
+    if (successCount > 0) {
+        alert('Successfully added ' + successCount + ' expense(s)!');
+        // Reload expenses
+        if (typeof loadExpenses === 'function') {
+            loadExpenses();
+        }
+    }
+
+    if (failCount > 0) {
+        alert('Failed to add ' + failCount + ' expense(s). Please try again.');
+    }
+}
+
+function closeReviewModal() {
+    const reviewModal = document.getElementById('voiceReviewModal');
+    if (reviewModal) {
+        reviewModal.style.display = 'none';
+    }
+}
+
+function reRecord() {
+    closeReviewModal();
+    startVoiceRecording();
+}
+
+// Load categories on page load
+async function loadCategories() {
+    try {
+        const response = await fetch('/categories');
+        if (response.ok) {
+            currentCategories = await response.json();
+        }
+    } catch (error) {
+        console.error('Error loading categories:', error);
+    }
+}
+
+// Initialize voice button when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    updateVoiceUI('idle');
+    loadCategories();
+});

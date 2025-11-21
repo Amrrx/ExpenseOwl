@@ -57,7 +57,11 @@
 
         <div class="table-controls">
             <button id="toggleExpenseFormBtn" class="nav-button"><i class="fa-solid fa-plus"></i> Add Expense</button>
+            <button id="voiceButton" class="voice-button" title="Add expense by voice">
+                <i class="fas fa-microphone"></i>
+            </button>
         </div>
+        <div id="voiceStatus" class="voice-status"></div>
 
         <div id="addExpenseContainer" style="display: none;">
             <div class="form-container">
@@ -133,6 +137,32 @@
             <div class="cashflow-item balance">
                 <div class="cashflow-label">Balance</div>
                 <div class="cashflow-value" id="cashflow-balance"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voice Review Modal -->
+    <div id="voiceReviewModal" class="voice-modal">
+        <div class="voice-modal-content">
+            <div class="voice-modal-header">
+                <h2>Review Voice Expenses</h2>
+                <button class="close-modal" onclick="closeReviewModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="voice-transcript">
+                <strong>You said:</strong> <span id="voiceTranscript"></span>
+            </div>
+            <div id="reviewExpenseList" class="review-expense-list">
+                <!-- Expense cards will be inserted here -->
+            </div>
+            <div class="voice-modal-actions">
+                <button class="modal-btn secondary" onclick="reRecord()">
+                    <i class="fas fa-microphone"></i> Re-record
+                </button>
+                <button class="modal-btn primary" onclick="confirmAllExpenses()">
+                    <i class="fas fa-check"></i> Confirm All
+                </button>
             </div>
         </div>
     </div>
@@ -526,6 +556,9 @@
             }
         });
         document.addEventListener('DOMContentLoaded', initialize);
+
+        // Alias for voice.js compatibility
+        const loadExpenses = initialize;
 
         document.getElementById('name').addEventListener('click', (e) => {
             if (e.target.value === '-') {
