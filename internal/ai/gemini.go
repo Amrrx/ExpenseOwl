@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/generative-ai-go/genai"
 	"google.golang.org/api/option"
