@@ -269,6 +269,7 @@ var defaultCategories = []string{
 var SupportedCurrencies = []string{
 	"usd", // US Dollar
 	"eur", // Euro
+	"egp", // Egyptian Pound
 	"gbp", // British Pound
 	"jpy", // Japanese Yen
 	"cny", // Chinese Yuan

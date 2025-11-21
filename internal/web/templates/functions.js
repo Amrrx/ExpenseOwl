@@ -6,6 +6,7 @@ const colorPalette = [
 const currencyBehaviors = {
     usd: {symbol: "$", useComma: false, useDecimals: true, useSpace: false, right: false},
     eur: {symbol: "€", useComma: true, useDecimals: true, useSpace: false, right: false},
+    egp: {symbol: "E£", useComma: false, useDecimals: true, useSpace: true, right: false},
     gbp: {symbol: "£", useComma: false, useDecimals: true, useSpace: false, right: false},
     jpy: {symbol: "¥", useComma: false, useDecimals: false, useSpace: false, right: false},
     cny: {symbol: "¥", useComma: false, useDecimals: true, useSpace: false, right: false},
