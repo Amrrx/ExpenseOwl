@@ -212,26 +212,28 @@ async function sendAudioForParsing(audioBlob) {
         reader.readAsDataURL(audioBlob);
 
         reader.onloadend = async () => {
-            const base64Audio = reader.result;
+            try {
+                const base64Audio = reader.result;
 
-            const response = await fetch('/voice/parse', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ audioData: base64Audio })
-            });
+                const response = await fetch('/voice/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ audioData: base64Audio })
+                });
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to parse audio');
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to parse audio');
+                }
+
+                const result = await response.json();
+                showReviewScreen(result);
+            } catch (error) {
+                console.error('Error parsing audio:', error);
+                alert('Failed to parse voice input: ' + error.message);
+                updateVoiceUI('idle');
             }
-
-            const result = await response.json();
-            showReviewScreen(result);
-        } catch (error) {
-            console.error('Error parsing audio:', error);
-            alert('Failed to parse voice input: ' + error.message);
-            updateVoiceUI('idle');
-        }
+        };
     } catch (error) {
         console.error('Error processing audio:', error);
         alert('Failed to process audio: ' + error.message);
