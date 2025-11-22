@@ -136,6 +136,7 @@ func runAuthServer(port int) {
 	pgHandler := api.NewPostgresHandler(db)
 	authHandler := api.NewAuthHandler(db, jwtManager)
 	oauthHandler := api.NewOAuthHandler(db, jwtManager, cfg.GoogleClientID, cfg.AppleClientID, cfg.AppleTeamID, cfg.AppleKeyID, cfg.ApplePrivateKeyPath)
+	syncHandler := api.NewSyncHandler(db)
 
 	// Create middleware
 	authMiddleware := api.AuthMiddleware(jwtManager)
@@ -240,6 +241,11 @@ func runAuthServer(port int) {
 	http.Handle("/api/recurring-expenses", authMiddleware(http.HandlerFunc(pgHandler.GetRecurringExpenses)))
 	http.Handle("/api/recurring-expense/edit", authMiddleware(http.HandlerFunc(pgHandler.UpdateRecurringExpense)))
 	http.Handle("/api/recurring-expense/delete", authMiddleware(http.HandlerFunc(pgHandler.DeleteRecurringExpense)))
+
+	// Sync (for offline-first mobile app)
+	http.Handle("/api/sync/pull", authMiddleware(http.HandlerFunc(syncHandler.Pull)))
+	http.Handle("/api/sync/push", authMiddleware(http.HandlerFunc(syncHandler.Push)))
+	http.Handle("/api/sync/status", authMiddleware(http.HandlerFunc(syncHandler.GetSyncStatus)))
 
 	// TODO: Import/Export not yet implemented for PostgreSQL
 	// http.Handle("/api/export/csv", authMiddleware(http.HandlerFunc(pgHandler.ExportCSV)))
