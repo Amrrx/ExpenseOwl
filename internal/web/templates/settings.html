@@ -45,7 +45,7 @@
         </a>
     </div>
 
-    <div class="container">
+    <div class="container page-enter">
 
         <div class="info-field">
             Version: <a href="https://github.com/tanq16/expenseowl/releases/latest" target="_blank" rel="noopener noreferrer">v4.0</a>
@@ -64,14 +64,14 @@
                     <input type="text" id="newCategory" placeholder="Add new category">
                     <button id="addCategory" class="nav-button">Add</button>
                 </div>
-                <button id="saveCategories" class="nav-button">Save Categories</button>
+                <button id="saveCategories" class="nav-button primary glow-on-hover">Save Categories</button>
                 <div id="categoriesMessage" class="form-message"></div>
             </div>
         </div>
 
         <div class="settings-container">
-            <div class="form-container half-width">
-                <h2 align="center">Currency Settings</h2>
+            <div class="form-container half-width stagger-item">
+                <h2 class="text-center">Currency Settings</h2>
                 <div class="currency-selector">
                     <select id="currencySelect">
                     </select>
@@ -79,9 +79,9 @@
                 </div>
                 <div id="currencyMessage" class="form-message"></div>
             </div>
-            
-            <div class="form-container half-width">
-                <h2 align="center">Start Date Settings</h2>
+
+            <div class="form-container half-width stagger-item">
+                <h2 class="text-center">Start Date Settings</h2>
                 <div class="start-date-manager">
                     <input type="number" id="startDate" min="1" max="31" placeholder="1">
                     <button id="saveStartDate" class="nav-button">Save</button>
@@ -91,8 +91,8 @@
         </div>
 
         <div class="settings-container">
-            <div class="form-container half-width">
-                <h2 align="center">Theme Settings</h2>
+            <div class="form-container half-width stagger-item">
+                <h2 class="text-center">Theme Settings</h2>
                 <div class="theme-selector">
                     <select id="themeSelect">
                         <option value="system">System Default</option>
@@ -102,8 +102,8 @@
                 </div>
                 <div id="themeMessage" class="form-message"></div>
             </div>
-            <div class="form-container half-width">
-                <h2 align="center">Import/Export Data</h2>
+            <div class="form-container half-width stagger-item">
+                <h2 class="text-center">Import/Export Data</h2>
                 <div class="export-buttons">
                     <div class="export-options">
                         <a href="/export/csv" id="csv-export-file" class="nav-button" download="expenses.csv">Export to CSV</a>
@@ -180,7 +180,7 @@
                     <label for="recurringReportGain">Report Gain</label>
                     <input type="checkbox" id="recurringReportGain" class="styled-checkbox">
                 </div>
-                <button type="submit" class="nav-button">Add Recurring Transaction</button>
+                <button type="submit" class="nav-button primary glow-on-hover">Add Recurring Transaction</button>
             </form>
             <div id="recurringExpenseMessage" class="form-message"></div>
             <h3 align="center" style="margin-top: 2rem;">Existing Recurring Transactions</h3>

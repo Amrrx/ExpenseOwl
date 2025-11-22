@@ -63,7 +63,7 @@
         <i class="fa-solid fa-plus"></i>
     </button>
 
-    <div class="container">
+    <div class="container page-enter">
 
         <div class="month-navigation">
             <button id="prevMonth" class="nav-button"><i class="fa-solid fa-arrow-left"></i></button>
@@ -80,7 +80,7 @@
         <div id="voiceStatus" class="voice-status"></div>
 
         <div id="addExpenseContainer" style="display: none;">
-            <div class="form-container">
+            <div class="form-container animate-slide-in">
                 <form id="expenseForm" class="expense-form">
                     <div class="form-group">
                         <label for="name">Name</label>
@@ -126,7 +126,7 @@
                         <input type="checkbox" id="reportGain" class="styled-checkbox">
                     </div>
     
-                    <button type="submit" class="nav-button">Add Expense</button>
+                    <button type="submit" class="nav-button primary glow-on-hover">Add Expense</button>
                 </form>
                 <div id="formMessage" class="form-message"></div>
             </div>
@@ -142,15 +142,15 @@
         </div>
 
         <div id="cashflow-section" class="cashflow-container">
-            <div class="cashflow-item income">
+            <div class="cashflow-item income stagger-item">
                 <div class="cashflow-label">Income</div>
                 <div class="cashflow-value" id="cashflow-income"></div>
             </div>
-            <div class="cashflow-item expenses">
+            <div class="cashflow-item expenses stagger-item">
                 <div class="cashflow-label">Expenses</div>
                 <div class="cashflow-value" id="cashflow-expenses"></div>
             </div>
-            <div class="cashflow-item balance">
+            <div class="cashflow-item balance stagger-item">
                 <div class="cashflow-label">Balance</div>
                 <div class="cashflow-value" id="cashflow-balance"></div>
             </div>
