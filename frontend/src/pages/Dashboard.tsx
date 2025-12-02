@@ -1,137 +1,635 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../stores/authStore';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import type { TooltipItem } from 'chart.js';
+import { Pie } from 'react-chartjs-2';
+import { Plus, ChevronLeft, ChevronRight, Mic, Square, Loader2 } from 'lucide-react';
+import { Layout, Button, Card, CardBody, Input, Select, TagInput, VoiceModal } from '../components';
 import { api } from '../services/api';
-import type { Expense } from '../types';
-import { format } from 'date-fns';
+import type { Expense, Config } from '../types';
+import { formatCurrency, COLOR_PALETTE } from '../utils/currency';
+import { formatMonth, getMonthBounds, getISODateWithLocalTime } from '../utils/dates';
+import { useVoiceRecording, type ParsedExpense } from '../hooks/useVoiceRecording';
+
+ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.defaults.color = '#9ca3af';
+ChartJS.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+interface CategoryData {
+  category: string;
+  total: number;
+  percentage: number;
+}
 
 export function Dashboard() {
-  const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [currentCurrency, setCurrentCurrency] = useState('usd');
+  const [startDate, setStartDate] = useState(1);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
+  const [disabledCategories, setDisabledCategories] = useState<Set<string>>(new Set());
+  const [categoryColors, setCategoryColors] = useState<Record<string, string>>({});
+  const [allTags, setAllTags] = useState<Set<string>>(new Set());
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [categories, setCategories] = useState<string[]>([]);
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [formMessage, setFormMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Voice recording
+  const { state: voiceState, error: voiceError, startRecording, stopRecording } = useVoiceRecording();
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceParsedExpenses, setVoiceParsedExpenses] = useState<ParsedExpense[]>([]);
+
+  const [formData, setFormData] = useState({
+    name: '',
+    category: '',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    reportGain: false,
+  });
 
   useEffect(() => {
-    loadExpenses();
+    initialize();
   }, []);
 
-  const loadExpenses = async () => {
+  const assignCategoryColors = (categoriesList: string[]) => {
+    const colors: Record<string, string> = { ...categoryColors };
+    categoriesList.forEach((category, index) => {
+      if (!colors[category]) {
+        colors[category] = COLOR_PALETTE[index % COLOR_PALETTE.length];
+      }
+    });
+    setCategoryColors(colors);
+  };
+
+  const getMonthExpenses = (expenses: Expense[]): Expense[] => {
+    const { start, end } = getMonthBounds(currentDate, startDate);
+    return expenses.filter((e) => {
+      const expenseDate = new Date(e.date);
+      return expenseDate >= start && expenseDate < end;
+    });
+  };
+
+  const calculateCategoryBreakdown = (expenses: Expense[]): CategoryData[] => {
+    const categoryTotals: Record<string, number> = {};
+    let totalAmount = 0;
+
+    expenses.forEach(exp => {
+      if (exp.amount < 0 && !disabledCategories.has(exp.category)) {
+        const amount = Math.abs(exp.amount);
+        categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + amount;
+        totalAmount += amount;
+      }
+    });
+
+    return Object.entries(categoryTotals)
+      .map(([category, total]) => ({
+        category,
+        total,
+        percentage: totalAmount > 0 ? (total / totalAmount) * 100 : 0
+      }))
+      .sort((a, b) => b.total - a.total);
+  };
+
+  const calculateIncome = (expenses: Expense[]): number => {
+    return expenses
+      .filter(exp => exp.amount > 0)
+      .reduce((sum, exp) => sum + exp.amount, 0);
+  };
+
+  const calculateExpenses = (expenses: Expense[]): number => {
+    return expenses
+      .filter(exp => exp.amount < 0)
+      .reduce((sum, exp) => sum + Math.abs(exp.amount), 0);
+  };
+
+  const toggleCategory = (category: string) => {
+    setDisabledCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(category)) {
+        newSet.delete(category);
+      } else {
+        newSet.add(category);
+      }
+      return newSet;
+    });
+  };
+
+  const initialize = async () => {
     try {
-      setIsLoading(true);
+      const config: Config = await api.getConfig();
+      setCategories(config.categories);
+      setCurrentCurrency(config.currency);
+      setStartDate(config.startDate);
+      setFormData(prev => ({ ...prev, category: config.categories[0] || '' }));
+
       const data = await api.getExpenses();
-      setExpenses(data);
-    } catch (err) {
-      setError('Failed to load expenses');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+      const expenses = Array.isArray(data) ? data : [];
+      setAllExpenses(expenses);
+
+      const tags = new Set<string>();
+      expenses.forEach(exp => {
+        if (exp.tags && Array.isArray(exp.tags)) {
+          exp.tags.forEach(tag => tags.add(tag));
+        }
+      });
+      setAllTags(tags);
+
+      const uniqueCategories = [...new Set(expenses.map(exp => exp.category))];
+      assignCategoryColors(uniqueCategories);
+    } catch (error) {
+      console.error('Failed to initialize dashboard:', error);
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
+  const handlePrevMonth = () => {
+    setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(newDate.getMonth() - 1);
+      return newDate;
+    });
   };
 
-  const totalIncome = expenses
-    .filter((e) => e.amount > 0)
-    .reduce((sum, e) => sum + e.amount, 0);
+  const handleNextMonth = () => {
+    setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(newDate.getMonth() + 1);
+      return newDate;
+    });
+  };
 
-  const totalExpenses = Math.abs(
-    expenses
-      .filter((e) => e.amount < 0)
-      .reduce((sum, e) => sum + e.amount, 0)
-  );
+  const handleAddTag = (tag: string) => {
+    setSelectedTags(prev => new Set([...prev, tag]));
+  };
 
-  const balance = totalIncome - totalExpenses;
+  const handleRemoveTag = (tag: string) => {
+    setSelectedTags(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(tag);
+      return newSet;
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      const isGain = formData.reportGain;
+      let amount = parseFloat(formData.amount);
+      if (!isGain) {
+        amount *= -1;
+      }
+
+      const expenseData = {
+        name: formData.name,
+        category: formData.category,
+        amount: amount,
+        currency: currentCurrency,
+        date: getISODateWithLocalTime(formData.date),
+        tags: Array.from(selectedTags)
+      };
+
+      await api.addExpense(expenseData);
+
+      setFormMessage({ type: 'success', text: 'Expense added successfully!' });
+
+      setFormData({
+        name: '',
+        category: categories[0] || '',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        reportGain: false,
+      });
+      setSelectedTags(new Set());
+
+      await initialize();
+
+      setTimeout(() => {
+        setFormMessage(null);
+      }, 3000);
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      setFormMessage({ type: 'error', text: 'Failed to add expense' });
+      setTimeout(() => {
+        setFormMessage(null);
+      }, 3000);
+    }
+  };
+
+  const handleVoiceButtonClick = async () => {
+    if (voiceState === 'idle') {
+      await startRecording();
+    } else if (voiceState === 'recording') {
+      try {
+        const result = await stopRecording();
+        setVoiceTranscript(result.transcript);
+        setVoiceParsedExpenses(result.expenses);
+        setShowVoiceModal(true);
+      } catch (err) {
+        console.error('Voice recording error:', err);
+        setFormMessage({
+          type: 'error',
+          text: voiceError || 'Failed to process voice recording'
+        });
+        setTimeout(() => setFormMessage(null), 3000);
+      }
+    }
+  };
+
+  const handleVoiceReRecord = async () => {
+    setShowVoiceModal(false);
+    setVoiceTranscript('');
+    setVoiceParsedExpenses([]);
+    await startRecording();
+  };
+
+  const handleConfirmVoiceExpenses = async (expenses: ParsedExpense[]) => {
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const expense of expenses) {
+      try {
+        await api.addExpense({
+          name: expense.name,
+          amount: expense.amount,
+          category: expense.category,
+          currency: currentCurrency,
+          date: getISODateWithLocalTime(expense.date),
+          tags: []
+        });
+        successCount++;
+      } catch (error) {
+        console.error('Error adding expense:', error);
+        failCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      setFormMessage({
+        type: 'success',
+        text: `Successfully added ${successCount} expense${successCount > 1 ? 's' : ''}!`
+      });
+      await initialize();
+      setTimeout(() => setFormMessage(null), 3000);
+    }
+
+    if (failCount > 0) {
+      setFormMessage({
+        type: 'error',
+        text: `Failed to add ${failCount} expense${failCount > 1 ? 's' : ''}`
+      });
+      setTimeout(() => setFormMessage(null), 3000);
+    }
+
+    setShowVoiceModal(false);
+    setVoiceTranscript('');
+    setVoiceParsedExpenses([]);
+  };
+
+  const monthExpenses = getMonthExpenses(allExpenses);
+  const hasExpenses = monthExpenses.some(e => e.amount < 0);
+  const categoryData = calculateCategoryBreakdown(monthExpenses);
+  const income = calculateIncome(monthExpenses);
+  const expenseTotal = calculateExpenses(monthExpenses);
+  const balance = income - expenseTotal;
+
+  const currentMonthCategories = [...new Set(monthExpenses
+    .filter(exp => exp.amount < 0)
+    .map(exp => exp.category))];
+
+  const categoryMap = new Map(categoryData.map(cat => [cat.category, cat]));
+
+  const sortedCategories = currentMonthCategories.sort((a, b) => {
+    const dataA = categoryMap.get(a);
+    const dataB = categoryMap.get(b);
+    if (dataA && dataB) return dataB.total - dataA.total;
+    if (dataA) return -1;
+    if (dataB) return 1;
+    return a.localeCompare(b);
+  });
+
+  const activeTotalExpenses = monthExpenses
+    .filter(exp => exp.amount < 0 && !disabledCategories.has(exp.category))
+    .reduce((sum, exp) => sum + Math.abs(exp.amount), 0);
+
+  const chartData = {
+    labels: categoryData.map(c => c.category),
+    datasets: [{
+      data: categoryData.map(c => c.total),
+      backgroundColor: categoryData.map(c => categoryColors[c.category]),
+      borderColor: '#1a1a1a',
+      borderWidth: 2
+    }]
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false
+      },
+      tooltip: {
+        callbacks: {
+          label: (context: TooltipItem<'pie'>) => {
+            const value = context.parsed;
+            const total = context.dataset.data.reduce((sum: number, val) => sum + (val as number), 0);
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            return `${context.label}: ${formatCurrency(value, currentCurrency)} (${percentage}%)`;
+          }
+        }
+      }
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">ExpenseOwl</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">
-                {user?.full_name || user?.email}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
-              >
-                Logout
-              </button>
-            </div>
+    <Layout>
+      {/* Month Navigation */}
+      <Card className="mb-6">
+        <CardBody className="!py-3">
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handlePrevMonth}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {formatMonth(currentDate)}
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleNextMonth}
+            >
+              <ChevronRight className="w-5 h-5" />
+            </Button>
           </div>
+        </CardBody>
+      </Card>
+
+      {/* Add Expense & Voice Buttons */}
+      <div className="flex gap-3 mb-4">
+        <Button
+          variant="primary"
+          className="flex-1"
+          onClick={() => setShowExpenseForm(!showExpenseForm)}
+        >
+          <Plus className="w-5 h-5" />
+          {showExpenseForm ? 'Close Form' : 'Add Expense'}
+        </Button>
+
+        <Button
+          variant={voiceState === 'recording' ? 'danger' : 'secondary'}
+          onClick={handleVoiceButtonClick}
+          disabled={voiceState === 'processing'}
+          title={
+            voiceState === 'idle'
+              ? 'Add expense by voice'
+              : voiceState === 'recording'
+              ? 'Stop recording'
+              : 'Processing...'
+          }
+          className={`${voiceState === 'recording' ? 'animate-pulse' : ''}`}
+        >
+          {voiceState === 'idle' && <Mic className="w-5 h-5" />}
+          {voiceState === 'recording' && <Square className="w-5 h-5" />}
+          {voiceState === 'processing' && <Loader2 className="w-5 h-5 animate-spin" />}
+        </Button>
+      </div>
+
+      {/* Voice Status Message */}
+      {voiceState === 'recording' && (
+        <div className="mb-4 p-3 bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800 rounded-lg text-center">
+          <p className="text-sm text-danger-800 dark:text-danger-300 font-medium">
+            Recording... (tap to stop)
+          </p>
         </div>
-      </nav>
+      )}
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-sm font-medium text-gray-500">Income</h3>
-              <p className="mt-2 text-3xl font-bold text-green-600">
-                ${totalIncome.toFixed(2)}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-sm font-medium text-gray-500">Expenses</h3>
-              <p className="mt-2 text-3xl font-bold text-red-600">
-                ${totalExpenses.toFixed(2)}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-sm font-medium text-gray-500">Balance</h3>
-              <p className={`mt-2 text-3xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                ${balance.toFixed(2)}
-              </p>
-            </div>
-          </div>
+      {voiceState === 'processing' && (
+        <div className="mb-4 p-3 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg text-center">
+          <p className="text-sm text-primary-800 dark:text-primary-300 font-medium">
+            Processing audio...
+          </p>
+        </div>
+      )}
 
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Recent Transactions</h2>
-            </div>
-            <div className="divide-y divide-gray-200">
-              {isLoading && (
-                <div className="px-6 py-12 text-center text-gray-500">
-                  Loading...
-                </div>
-              )}
+      {/* Expense Form */}
+      {showExpenseForm && (
+        <Card className="mb-6 animate-slide-up">
+          <CardBody>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <Input
+                label="Name"
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Expense name"
+              />
 
-              {error && (
-                <div className="px-6 py-12 text-center text-red-600">
-                  {error}
-                </div>
-              )}
+              <Select
+                label="Category"
+                required
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                options={categories.map(cat => ({ value: cat, label: cat }))}
+              />
 
-              {!isLoading && !error && expenses.length === 0 && (
-                <div className="px-6 py-12 text-center text-gray-500">
-                  No expenses yet. Start tracking!
-                </div>
-              )}
+              <TagInput
+                label="Tags"
+                selectedTags={selectedTags}
+                availableTags={allTags}
+                onAddTag={handleAddTag}
+                onRemoveTag={handleRemoveTag}
+              />
 
-              {!isLoading && !error && expenses.map((expense) => (
-                <div key={expense.id} className="px-6 py-4 flex justify-between items-center hover:bg-gray-50">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{expense.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {expense.category} • {format(new Date(expense.date), 'MMM d, yyyy')}
-                    </p>
+              <Input
+                label="Amount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                required
+                value={formData.amount}
+                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                placeholder="0.00"
+              />
+
+              <Input
+                label="Date"
+                type="date"
+                required
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              />
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="reportGain"
+                  checked={formData.reportGain}
+                  onChange={(e) => setFormData({ ...formData, reportGain: e.target.checked })}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <label htmlFor="reportGain" className="text-sm text-gray-700 dark:text-gray-300">
+                  Report Gain (Income)
+                </label>
+              </div>
+
+              <Button type="submit" variant="primary" className="w-full">
+                Add Expense
+              </Button>
+            </form>
+
+            {formMessage && (
+              <div className={`mt-4 p-3 rounded-lg ${
+                formMessage.type === 'success'
+                  ? 'bg-success-50 text-success-800 border border-success-200 dark:bg-success-900/20 dark:text-success-300 dark:border-success-800'
+                  : 'bg-danger-50 text-danger-800 border border-danger-200 dark:bg-danger-900/20 dark:text-danger-300 dark:border-danger-800'
+              }`}>
+                {formMessage.text}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
+
+      {/* No Data */}
+      {!hasExpenses && (
+        <Card>
+          <CardBody className="text-center py-12">
+            <p className="text-gray-500 dark:text-gray-400">
+              No expenses recorded this month.
+            </p>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Chart & Legend */}
+      {hasExpenses && (
+        <>
+          <Card className="mb-6">
+            <CardBody>
+              <div className="h-[280px] flex items-center justify-center mb-6">
+                <Pie data={chartData} options={chartOptions} />
+              </div>
+
+              <div className="space-y-2">
+                {sortedCategories.map(category => {
+                  const color = categoryColors[category];
+                  const categoryDataItem = categoryMap.get(category);
+                  const percentage = categoryDataItem ? categoryDataItem.percentage.toFixed(1) : '0.0';
+                  const amount = categoryDataItem ? categoryDataItem.total : 0;
+                  const isDisabled = disabledCategories.has(category);
+
+                  return (
+                    <button
+                      key={category}
+                      onClick={() => toggleCategory(category)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${
+                        isDisabled
+                          ? 'opacity-40 bg-gray-100 dark:bg-gray-800'
+                          : 'bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      <div
+                        className="w-6 h-6 rounded flex-shrink-0"
+                        style={{ backgroundColor: color }}
+                      />
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="flex justify-between items-baseline">
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {category} ({percentage}%)
+                          </span>
+                          <span className="text-sm text-gray-600 dark:text-gray-400 font-semibold">
+                            {formatCurrency(amount, currentCurrency)}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-900 dark:text-white">Total:</span>
+                    <span className="font-bold text-gray-900 dark:text-white">
+                      {formatCurrency(activeTotalExpenses, currentCurrency)}
+                    </span>
                   </div>
-                  <span className={`text-sm font-semibold ${expense.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {expense.amount > 0 ? '+' : ''}{expense.currency.toUpperCase()} {Math.abs(expense.amount).toFixed(2)}
-                  </span>
                 </div>
-              ))}
-            </div>
+              </div>
+            </CardBody>
+          </Card>
+
+          {/* Cashflow Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="border-l-4 border-success-500">
+              <CardBody>
+                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Income
+                </div>
+                <div className="text-2xl font-bold text-success-600 dark:text-success-400">
+                  {formatCurrency(income, currentCurrency)}
+                </div>
+              </CardBody>
+            </Card>
+
+            <Card className="border-l-4 border-danger-500">
+              <CardBody>
+                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Expenses
+                </div>
+                <div className="text-2xl font-bold text-danger-600 dark:text-danger-400">
+                  {formatCurrency(expenseTotal, currentCurrency)}
+                </div>
+              </CardBody>
+            </Card>
+
+            <Card className="border-l-4 border-primary-500">
+              <CardBody>
+                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Balance
+                </div>
+                <div className={`text-2xl font-bold ${
+                  balance >= 0
+                    ? 'text-success-600 dark:text-success-400'
+                    : 'text-danger-600 dark:text-danger-400'
+                }`}>
+                  {formatCurrency(balance, currentCurrency)}
+                </div>
+              </CardBody>
+            </Card>
           </div>
-        </div>
-      </main>
-    </div>
+        </>
+      )}
+
+      {/* Voice Modal */}
+      <VoiceModal
+        isOpen={showVoiceModal}
+        onClose={() => {
+          setShowVoiceModal(false);
+          setVoiceTranscript('');
+          setVoiceParsedExpenses([]);
+        }}
+        transcript={voiceTranscript}
+        expenses={voiceParsedExpenses}
+        categories={categories}
+        onConfirmAll={handleConfirmVoiceExpenses}
+        onReRecord={handleVoiceReRecord}
+      />
+
+      {/* FAB for mobile */}
+      <button
+        onClick={() => setShowExpenseForm(!showExpenseForm)}
+        className={`fixed bottom-24 right-6 w-14 h-14 bg-gradient-to-br from-primary-600 to-primary-700 text-white rounded-full shadow-xl hover:shadow-2xl flex items-center justify-center transition-all duration-300 z-40 md:hidden ${
+          showExpenseForm ? 'rotate-45' : ''
+        }`}
+        aria-label="Add expense"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+    </Layout>
   );
 }

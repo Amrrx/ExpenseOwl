@@ -267,6 +267,7 @@ func runAuthServer(port int) {
 	log.Printf("🚀 Server starting on port %d...", port)
 	log.Println("🔓 Public endpoints: /api/auth/*, /health, /version")
 	log.Println("🔒 Protected endpoints: /api/* (requires Bearer token)")
+	log.Println("🌐 CORS enabled for all origins")
 
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), api.CORSMiddleware(http.DefaultServeMux)); err != nil {
 		log.Fatalf("Server failed to start: %v", err)

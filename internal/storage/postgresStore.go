@@ -73,13 +73,12 @@ func (s *PostgresStore) Close() error {
 // GetConfig retrieves user configuration
 func (s *PostgresStore) GetConfig() (*Config, error) {
 	var config Config
-	var categoriesJSON string
 
 	err := s.db.QueryRow(`
 		SELECT categories, currency, start_date
 		FROM user_configs
 		WHERE user_id = $1
-	`, s.userID).Scan(&categoriesJSON, &config.Currency, &config.StartDate)
+	`, s.userID).Scan(pq.Array(&config.Categories), &config.Currency, &config.StartDate)
 
 	if err == sql.ErrNoRows {
 		// Return default config if not found
@@ -92,11 +91,6 @@ func (s *PostgresStore) GetConfig() (*Config, error) {
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config: %w", err)
-	}
-
-	// Parse categories JSON
-	if err := json.Unmarshal([]byte(categoriesJSON), &config.Categories); err != nil {
-		return nil, fmt.Errorf("failed to parse categories: %w", err)
 	}
 
 	// Get recurring expenses
@@ -113,10 +107,10 @@ func (s *PostgresStore) GetConfig() (*Config, error) {
 
 // GetCategories retrieves user categories
 func (s *PostgresStore) GetCategories() ([]string, error) {
-	var categoriesJSON string
+	var categories []string
 	err := s.db.QueryRow(`
 		SELECT categories FROM user_configs WHERE user_id = $1
-	`, s.userID).Scan(&categoriesJSON)
+	`, s.userID).Scan(pq.Array(&categories))
 
 	if err == sql.ErrNoRows {
 		return []string{"Food", "Groceries", "Travel", "Rent", "Utilities", "Entertainment", "Healthcare", "Shopping", "Miscellaneous", "Income"}, nil
@@ -126,26 +120,16 @@ func (s *PostgresStore) GetCategories() ([]string, error) {
 		return nil, fmt.Errorf("failed to get categories: %w", err)
 	}
 
-	var categories []string
-	if err := json.Unmarshal([]byte(categoriesJSON), &categories); err != nil {
-		return nil, fmt.Errorf("failed to parse categories: %w", err)
-	}
-
 	return categories, nil
 }
 
 // UpdateCategories updates user categories
 func (s *PostgresStore) UpdateCategories(categories []string) error {
-	categoriesJSON, err := json.Marshal(categories)
-	if err != nil {
-		return fmt.Errorf("failed to marshal categories: %w", err)
-	}
-
-	_, err = s.db.Exec(`
-		UPDATE user_configs
-		SET categories = $1, updated_at = $2
-		WHERE user_id = $3
-	`, string(categoriesJSON), time.Now(), s.userID)
+	_, err := s.db.Exec(`
+		INSERT INTO user_configs (user_id, categories, currency, start_date, updated_at)
+		VALUES ($1, $2, 'usd', 1, $3)
+		ON CONFLICT (user_id) DO UPDATE SET categories = $2, updated_at = $3
+	`, s.userID, pq.Array(categories), time.Now())
 
 	return err
 }
@@ -167,10 +151,10 @@ func (s *PostgresStore) GetCurrency() (string, error) {
 // UpdateCurrency updates user currency
 func (s *PostgresStore) UpdateCurrency(currency string) error {
 	_, err := s.db.Exec(`
-		UPDATE user_configs
-		SET currency = $1, updated_at = $2
-		WHERE user_id = $3
-	`, currency, time.Now(), s.userID)
+		INSERT INTO user_configs (user_id, categories, currency, start_date, updated_at)
+		VALUES ($1, ARRAY['Food', 'Groceries', 'Travel', 'Rent', 'Utilities', 'Entertainment', 'Healthcare', 'Shopping', 'Miscellaneous', 'Income'], $2, 1, $3)
+		ON CONFLICT (user_id) DO UPDATE SET currency = $2, updated_at = $3
+	`, s.userID, currency, time.Now())
 
 	return err
 }
@@ -192,10 +176,10 @@ func (s *PostgresStore) GetStartDate() (int, error) {
 // UpdateStartDate updates user start date
 func (s *PostgresStore) UpdateStartDate(startDate int) error {
 	_, err := s.db.Exec(`
-		UPDATE user_configs
-		SET start_date = $1, updated_at = $2
-		WHERE user_id = $3
-	`, startDate, time.Now(), s.userID)
+		INSERT INTO user_configs (user_id, categories, currency, start_date, updated_at)
+		VALUES ($1, ARRAY['Food', 'Groceries', 'Travel', 'Rent', 'Utilities', 'Entertainment', 'Healthcare', 'Shopping', 'Miscellaneous', 'Income'], 'usd', $2, $3)
+		ON CONFLICT (user_id) DO UPDATE SET start_date = $2, updated_at = $3
+	`, s.userID, startDate, time.Now())
 
 	return err
 }

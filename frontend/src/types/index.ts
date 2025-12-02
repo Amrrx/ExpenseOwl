@@ -13,14 +13,12 @@ export interface AuthTokens {
 
 export interface AuthResponse {
   user: User;
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
+  tokens: AuthTokens;
 }
 
 export interface Expense {
   id: string;
-  recurring_id?: string;
+  recurringID?: string;
   name: string;
   tags: string[];
   category: string;
@@ -38,7 +36,7 @@ export interface RecurringExpense {
   currency: string;
   tags: string[];
   category: string;
-  start_date: string;
+  startDate: string;
   interval: 'daily' | 'weekly' | 'monthly' | 'yearly';
   occurrences: number;
   created_at?: string;
@@ -48,7 +46,7 @@ export interface RecurringExpense {
 export interface Config {
   categories: string[];
   currency: string;
-  start_date: number;
+  startDate: number;
   updated_at?: string;
 }
 
@@ -94,4 +92,18 @@ export interface RegisterRequest {
 export interface LoginRequest {
   email: string;
   password: string;
+}
+
+export interface ParsedExpense {
+  name: string;
+  amount: number;
+  category: string;
+  date: string;
+  confidence: number;
+  ambiguous: boolean;
+}
+
+export interface VoiceParseResponse {
+  transcript: string;
+  expenses: ParsedExpense[];
 }

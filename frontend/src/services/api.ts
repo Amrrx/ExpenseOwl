@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios from 'axios';
 import type {
   AuthResponse,
   RegisterRequest,
@@ -11,10 +11,10 @@ import type {
   SyncPushResponse,
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_BASE_URL = '';
 
 class ApiService {
-  private client: AxiosInstance;
+  private client: ReturnType<typeof axios.create>;
 
   constructor() {
     this.client = axios.create({
@@ -144,7 +144,7 @@ class ApiService {
   }
 
   async updateCategories(categories: string[]): Promise<void> {
-    await this.client.put('/api/categories/edit', { categories });
+    await this.client.put('/api/categories/edit', categories);
   }
 
   async getCurrency(): Promise<string> {
@@ -153,7 +153,7 @@ class ApiService {
   }
 
   async updateCurrency(currency: string): Promise<void> {
-    await this.client.put('/api/currency/edit', { currency });
+    await this.client.put('/api/currency/edit', currency);
   }
 
   async getStartDate(): Promise<number> {
@@ -162,7 +162,7 @@ class ApiService {
   }
 
   async updateStartDate(startDate: number): Promise<void> {
-    await this.client.put('/api/startdate/edit', { start_date: startDate });
+    await this.client.put('/api/startdate/edit', startDate);
   }
 
   async syncPull(lastSyncTime?: string): Promise<SyncPullResponse> {
