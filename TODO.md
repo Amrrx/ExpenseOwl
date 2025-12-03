@@ -12,12 +12,12 @@
 - [x] Add smooth page transitions between routes
 
 ## Priority 2 - Features
-- [ ] Category drag-and-drop reordering in Settings
+- [x] Category drag-and-drop reordering in Settings
 - [ ] AI Voice configuration UI (provider, API key, model selection)
 - [ ] Import from old ExpenseOwl format (pre-v4.0)
 - [ ] PWA service worker for offline support
-- [ ] Recurring expense edit modal with "Update Future" / "Update All" options
-- [ ] Recurring expense delete with "Delete Future" / "Delete All" options
+- [x] Recurring expense edit modal with "Update Future" / "Update All" options
+- [x] Recurring expense delete with "Delete Future" / "Delete All" options
 
 ## Priority 3 - UX Improvements
 - [ ] Keyboard shortcuts (Ctrl+N for new expense, etc.)

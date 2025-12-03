@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Download, Upload, Trash2, Plus, Moon, Sun, Monitor, Edit2, X, Check } from 'lucide-react';
+import { Download, Upload, Trash2, Plus, Moon, Sun, Monitor, Edit2, X, Check, GripVertical } from 'lucide-react';
+import { useDragReorder } from '../hooks/useDragReorder';
 import { Layout, Button, Card, CardHeader, CardBody, CardTitle, Input, Select, Modal, TagInput, SettingsSkeleton } from '../components';
 import { api } from '../services/api';
 import { SUPPORTED_CURRENCIES } from '../utils/currency';
-import type { RecurringExpense } from '../types';
+import type { RecurringExpense, AIConfig } from '../types';
 import { useToastStore } from '../stores/toastStore';
 
 const THEME_OPTIONS = [
@@ -20,6 +21,7 @@ export function Settings() {
   const [theme, setTheme] = useState('system');
   const [isLoading, setIsLoading] = useState(true);
   const toast = useToastStore();
+  const categoryDrag = useDragReorder<string>();
 
   // Recurring expenses state
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
@@ -31,17 +33,30 @@ export function Settings() {
     category: '',
     tags: new Set<string>(),
     interval: 'monthly' as 'daily' | 'weekly' | 'monthly' | 'yearly',
-    occurrences: 2,
+    occurrences: 1,
     startDate: new Date().toISOString().split('T')[0],
   });
   const [deleteRecurringId, setDeleteRecurringId] = useState<string | null>(null);
-  const [deleteAllOccurrences, setDeleteAllOccurrences] = useState(false);
+  const [deleteOption, setDeleteOption] = useState<'definition' | 'future' | 'all'>('definition');
+  const [updateOption, setUpdateOption] = useState<'future' | 'all'>('future');
   const [availableTags] = useState(new Set<string>());
+
+  // AI Voice config state
+  const [aiConfig, setAIConfig] = useState<AIConfig>({
+    enabled: false,
+    provider: 'gemini',
+    apiKey: '',
+    model: '',
+    hasApiKey: false,
+  });
+  const [aiConfigLoading, setAIConfigLoading] = useState(false);
+  const [aiTestLoading, setAITestLoading] = useState(false);
 
   useEffect(() => {
     loadSettings();
     loadTheme();
     loadRecurringExpenses();
+    loadAIConfig();
   }, []);
 
   const loadSettings = async () => {
@@ -65,6 +80,18 @@ export function Settings() {
       setRecurringExpenses(expenses);
     } catch (error) {
       console.error('Failed to load recurring expenses:', error);
+    }
+  };
+
+  const loadAIConfig = async () => {
+    try {
+      const config = await api.getAIConfig();
+      setAIConfig({
+        ...config,
+        apiKey: '', // Never show actual key, use hasApiKey flag
+      });
+    } catch (error) {
+      console.error('Failed to load AI config:', error);
     }
   };
 
@@ -197,6 +224,61 @@ export function Settings() {
     }
   };
 
+  const handleImportOldCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch(`/api/import/csvold`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: formData,
+      });
+
+      const result = await response.json();
+      toast.success(`Imported ${result.imported || 0} expenses from old format`);
+
+      // Clear the input
+      e.target.value = '';
+    } catch (error) {
+      toast.error('Failed to import old format CSV');
+    }
+  };
+
+  const handleSaveAIConfig = async () => {
+    setAIConfigLoading(true);
+    try {
+      await api.updateAIConfig(aiConfig);
+      await loadAIConfig();
+      toast.success('AI configuration saved');
+    } catch (error) {
+      toast.error('Failed to save AI configuration');
+    } finally {
+      setAIConfigLoading(false);
+    }
+  };
+
+  const handleTestAIConnection = async () => {
+    setAITestLoading(true);
+    try {
+      const result = await api.testAIConnection();
+      if (result.status === 'success') {
+        toast.success(result.message || 'AI connection successful');
+      } else {
+        toast.error(result.message || 'AI connection failed');
+      }
+    } catch (error) {
+      toast.error('Failed to test AI connection');
+    } finally {
+      setAITestLoading(false);
+    }
+  };
+
   const resetRecurringForm = () => {
     setRecurringForm({
       name: '',
@@ -204,7 +286,7 @@ export function Settings() {
       category: categories[0] || '',
       tags: new Set<string>(),
       interval: 'monthly',
-      occurrences: 2,
+      occurrences: 1,
       startDate: new Date().toISOString().split('T')[0],
     });
   };
@@ -232,6 +314,7 @@ export function Settings() {
     setShowRecurringModal(false);
     setEditingRecurring(null);
     resetRecurringForm();
+    setUpdateOption('future');
   };
 
   const handleSaveRecurring = async () => {
@@ -250,8 +333,8 @@ export function Settings() {
       return;
     }
 
-    if (recurringForm.occurrences < 2) {
-      toast.error('Occurrences must be at least 2');
+    if (recurringForm.occurrences < 1) {
+      toast.error('Occurrences must be at least 1');
       return;
     }
 
@@ -260,11 +343,14 @@ export function Settings() {
         ...recurringForm,
         tags: Array.from(recurringForm.tags),
         currency,
+        startDate: new Date(recurringForm.startDate).toISOString(),
       };
 
       if (editingRecurring) {
-        await api.updateRecurringExpense(editingRecurring.id, data, false);
-        toast.success('Recurring expense updated');
+        await api.updateRecurringExpense(editingRecurring.id, data, updateOption === 'all');
+        toast.success(updateOption === 'all'
+          ? 'Recurring expense and all occurrences updated'
+          : 'Recurring expense and future occurrences updated');
       } else {
         await api.addRecurringExpense(data);
         toast.success('Recurring expense added');
@@ -281,11 +367,19 @@ export function Settings() {
     if (!deleteRecurringId) return;
 
     try {
-      await api.deleteRecurringExpense(deleteRecurringId, deleteAllOccurrences);
-      toast.success(deleteAllOccurrences ? 'Recurring expense and all occurrences deleted' : 'Recurring expense deleted');
+      const removeAll = deleteOption === 'all';
+      await api.deleteRecurringExpense(deleteRecurringId, removeAll);
+
+      const messages = {
+        definition: 'Recurring expense deleted (occurrences kept)',
+        future: 'Recurring expense and future occurrences deleted',
+        all: 'Recurring expense and all occurrences deleted',
+      };
+      toast.success(messages[deleteOption]);
+
       await loadRecurringExpenses();
       setDeleteRecurringId(null);
-      setDeleteAllOccurrences(false);
+      setDeleteOption('definition');
     } catch (error) {
       toast.error('Failed to delete recurring expense');
     }
@@ -352,16 +446,25 @@ export function Settings() {
               </div>
             </div>
 
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+              Drag to reorder categories
+            </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
-              {categories.map((category) => (
+              {categories.map((category, index) => (
                 <div
                   key={category}
-                  className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg"
+                  draggable
+                  onDragStart={categoryDrag.handleDragStart(index)}
+                  onDragOver={categoryDrag.handleDragOver(index)}
+                  onDragEnd={categoryDrag.handleDragEnd}
+                  onDrop={categoryDrag.handleDrop(categories, setCategories)}
+                  className={`flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg cursor-grab active:cursor-grabbing transition-all ${categoryDrag.getDragStyles(index)}`}
                 >
-                  <span className="text-sm truncate">{category}</span>
+                  <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <span className="text-sm truncate flex-1">{category}</span>
                   <button
                     onClick={() => handleDeleteCategory(category)}
-                    className="text-danger-600 hover:text-danger-700 dark:text-danger-400"
+                    className="text-danger-600 hover:text-danger-700 dark:text-danger-400 flex-shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -526,6 +629,117 @@ export function Settings() {
                 </label>
               </div>
             </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                Import from ExpenseOwl v3.x or earlier (converts expense signs)
+              </p>
+              <div className="w-full">
+                <input
+                  type="file"
+                  id="csv-import-old"
+                  accept=".csv"
+                  onChange={handleImportOldCSV}
+                  className="hidden"
+                />
+                <label htmlFor="csv-import-old" className="block">
+                  <div className="inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 bg-amber-100 text-amber-800 hover:bg-amber-200 focus:ring-amber-500 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50 px-4 py-2 text-sm w-full cursor-pointer">
+                    <Upload className="w-4 h-4" />
+                    Import from Old Format
+                  </div>
+                </label>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+
+        {/* AI Voice Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle>AI Voice Input</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Enable AI Voice Input</span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Use voice commands to add expenses</p>
+                </div>
+                <button
+                  onClick={() => setAIConfig({ ...aiConfig, enabled: !aiConfig.enabled })}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                    aiConfig.enabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-gray-600'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      aiConfig.enabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {aiConfig.enabled && (
+                <>
+                  <Select
+                    label="AI Provider"
+                    value={aiConfig.provider}
+                    onChange={(e) => setAIConfig({ ...aiConfig, provider: e.target.value as AIConfig['provider'] })}
+                    options={[
+                      { value: 'gemini', label: 'Google Gemini' },
+                      { value: 'anthropic', label: 'Anthropic Claude' },
+                      { value: 'openai', label: 'OpenAI' },
+                    ]}
+                  />
+
+                  <div>
+                    <Input
+                      label="API Key"
+                      type="password"
+                      value={aiConfig.apiKey}
+                      onChange={(e) => setAIConfig({ ...aiConfig, apiKey: e.target.value })}
+                      placeholder={aiConfig.hasApiKey ? '••••••••••••••••' : 'Enter your API key'}
+                    />
+                    {aiConfig.hasApiKey && !aiConfig.apiKey && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        API key is already set. Enter a new key to replace it.
+                      </p>
+                    )}
+                  </div>
+
+                  <Input
+                    label="Model (optional)"
+                    type="text"
+                    value={aiConfig.model}
+                    onChange={(e) => setAIConfig({ ...aiConfig, model: e.target.value })}
+                    placeholder={
+                      aiConfig.provider === 'gemini' ? 'gemini-1.5-flash' :
+                      aiConfig.provider === 'anthropic' ? 'claude-3-haiku-20240307' :
+                      'gpt-4o-mini'
+                    }
+                  />
+
+                  <div className="flex gap-3">
+                    <Button
+                      variant="primary"
+                      onClick={handleSaveAIConfig}
+                      disabled={aiConfigLoading}
+                      className="flex-1"
+                    >
+                      {aiConfigLoading ? 'Saving...' : 'Save Configuration'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleTestAIConnection}
+                      disabled={aiTestLoading}
+                      className="flex-1"
+                    >
+                      {aiTestLoading ? 'Testing...' : 'Test Connection'}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
           </CardBody>
         </Card>
       </div>
@@ -594,9 +808,9 @@ export function Settings() {
           <Input
             label="Occurrences"
             type="number"
-            min="2"
+            min="1"
             value={recurringForm.occurrences}
-            onChange={(e) => setRecurringForm({ ...recurringForm, occurrences: parseInt(e.target.value) || 2 })}
+            onChange={(e) => setRecurringForm({ ...recurringForm, occurrences: parseInt(e.target.value) || 1 })}
           />
 
           <Input
@@ -605,6 +819,44 @@ export function Settings() {
             value={recurringForm.startDate}
             onChange={(e) => setRecurringForm({ ...recurringForm, startDate: e.target.value })}
           />
+
+          {editingRecurring && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Update Scope
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  <input
+                    type="radio"
+                    name="updateOption"
+                    value="future"
+                    checked={updateOption === 'future'}
+                    onChange={() => setUpdateOption('future')}
+                    className="w-4 h-4 text-primary-600 focus:ring-primary-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Update future only</span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Apply changes to future occurrences only</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  <input
+                    type="radio"
+                    name="updateOption"
+                    value="all"
+                    checked={updateOption === 'all'}
+                    onChange={() => setUpdateOption('all')}
+                    className="w-4 h-4 text-primary-600 focus:ring-primary-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Update all occurrences</span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Apply changes to all past and future occurrences</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <Button variant="ghost" onClick={handleCloseRecurringModal} className="flex-1">
@@ -624,31 +876,64 @@ export function Settings() {
         isOpen={deleteRecurringId !== null}
         onClose={() => {
           setDeleteRecurringId(null);
-          setDeleteAllOccurrences(false);
+          setDeleteOption('definition');
         }}
         title="Delete Recurring Expense"
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Are you sure you want to delete this recurring expense?
+            Choose what to delete:
           </p>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={deleteAllOccurrences}
-              onChange={(e) => setDeleteAllOccurrences(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-            />
-            <span className="text-sm text-gray-700 dark:text-gray-300">
-              Also delete all generated expense occurrences
-            </span>
-          </label>
+          <div className="space-y-2">
+            <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+              <input
+                type="radio"
+                name="deleteOption"
+                value="definition"
+                checked={deleteOption === 'definition'}
+                onChange={() => setDeleteOption('definition')}
+                className="w-4 h-4 text-primary-600 focus:ring-primary-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Delete definition only</span>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Keep all generated expenses, remove recurring schedule</p>
+              </div>
+            </label>
+            <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+              <input
+                type="radio"
+                name="deleteOption"
+                value="future"
+                checked={deleteOption === 'future'}
+                onChange={() => setDeleteOption('future')}
+                className="w-4 h-4 text-primary-600 focus:ring-primary-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Delete future occurrences</span>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Keep past expenses, remove future ones and schedule</p>
+              </div>
+            </label>
+            <label className="flex items-center gap-3 p-3 rounded-lg border border-danger-200 dark:border-danger-800 cursor-pointer hover:bg-danger-50 dark:hover:bg-danger-900/20 transition-colors">
+              <input
+                type="radio"
+                name="deleteOption"
+                value="all"
+                checked={deleteOption === 'all'}
+                onChange={() => setDeleteOption('all')}
+                className="w-4 h-4 text-danger-600 focus:ring-danger-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-danger-600 dark:text-danger-400">Delete all occurrences</span>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Remove all past and future expenses plus the schedule</p>
+              </div>
+            </label>
+          </div>
           <div className="flex gap-3 pt-4">
             <Button
               variant="ghost"
               onClick={() => {
                 setDeleteRecurringId(null);
-                setDeleteAllOccurrences(false);
+                setDeleteOption('definition');
               }}
               className="flex-1"
             >

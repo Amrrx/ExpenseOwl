@@ -40,8 +40,8 @@ func validateRecurringExpense(expense RecurringExpense) error {
 	if strings.TrimSpace(expense.Category) == "" {
 		return errors.New("recurring expense category cannot be empty")
 	}
-	if expense.Occurrences < 2 {
-		return errors.New("recurring expense must have at least 2 occurrences")
+	if expense.Occurrences < 1 {
+		return errors.New("recurring expense must have at least 1 occurrence")
 	}
 	validIntervals := map[string]bool{"daily": true, "weekly": true, "monthly": true, "yearly": true}
 	if !validIntervals[expense.Interval] {
@@ -474,7 +474,7 @@ func (s *PostgresStore) RemoveMultipleExpenses(ids []string) error {
 // GetRecurringExpenses retrieves all recurring expenses for the user
 func (s *PostgresStore) GetRecurringExpenses() ([]RecurringExpense, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, amount, currency, tags, category, start_date, interval_type, occurrences
+		SELECT id, name, amount, currency, tags, category, start_date, interval, occurrences
 		FROM recurring_expenses
 		WHERE user_id = $1 AND is_deleted = false
 		ORDER BY created_at DESC
@@ -531,7 +531,7 @@ func (s *PostgresStore) GetRecurringExpense(id string) (RecurringExpense, error)
 	var tagsJSON string
 
 	err := s.db.QueryRow(`
-		SELECT id, name, amount, currency, tags, category, start_date, interval_type, occurrences
+		SELECT id, name, amount, currency, tags, category, start_date, interval, occurrences
 		FROM recurring_expenses
 		WHERE id = $1 AND user_id = $2 AND is_deleted = false
 	`, id, s.userID).Scan(
@@ -582,7 +582,7 @@ func (s *PostgresStore) AddRecurringExpense(recurringExpense RecurringExpense) e
 	}
 
 	_, err := s.db.Exec(`
-		INSERT INTO recurring_expenses (id, user_id, name, amount, currency, tags, category, start_date, interval_type, occurrences, created_at)
+		INSERT INTO recurring_expenses (id, user_id, name, amount, currency, tags, category, start_date, interval, occurrences, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`, recurringExpense.ID, s.userID, recurringExpense.Name, recurringExpense.Amount, recurringExpense.Currency,
 		pq.Array(recurringExpense.Tags), recurringExpense.Category, recurringExpense.StartDate, recurringExpense.Interval,
@@ -590,6 +590,18 @@ func (s *PostgresStore) AddRecurringExpense(recurringExpense RecurringExpense) e
 
 	if err != nil {
 		return fmt.Errorf("failed to insert recurring expense: %w", err)
+	}
+
+	// Generate expenses from this recurring expense
+	expenses := generateExpensesFromRecurring(recurringExpense, false)
+	for _, exp := range expenses {
+		_, err := s.db.Exec(`
+			INSERT INTO expenses (id, user_id, recurring_id, name, tags, category, amount, currency, date, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`, exp.ID, s.userID, exp.RecurringID, exp.Name, pq.Array(exp.Tags), exp.Category, exp.Amount, exp.Currency, exp.Date, time.Now())
+		if err != nil {
+			return fmt.Errorf("failed to insert generated expense: %w", err)
+		}
 	}
 
 	return nil
@@ -610,7 +622,7 @@ func (s *PostgresStore) UpdateRecurringExpense(id string, recurringExpense Recur
 	result, err := s.db.Exec(`
 		UPDATE recurring_expenses
 		SET name = $1, amount = $2, currency = $3, tags = $4, category = $5,
-		    start_date = $6, interval_type = $7, occurrences = $8, last_modified_at = $9
+		    start_date = $6, interval = $7, occurrences = $8, last_modified_at = $9
 		WHERE id = $10 AND user_id = $11 AND is_deleted = false
 	`, recurringExpense.Name, recurringExpense.Amount, recurringExpense.Currency, pq.Array(recurringExpense.Tags),
 		recurringExpense.Category, recurringExpense.StartDate, recurringExpense.Interval,

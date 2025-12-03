@@ -9,6 +9,7 @@ import type {
   SyncPullResponse,
   SyncPushRequest,
   SyncPushResponse,
+  AIConfig,
 } from '../types';
 import { useToastStore } from '../stores/toastStore';
 
@@ -186,6 +187,20 @@ class ApiService {
 
   async getSyncStatus(): Promise<{ has_synced: boolean; last_sync_time: string | null }> {
     const response = await this.client.get('/api/sync/status');
+    return response.data;
+  }
+
+  async getAIConfig(): Promise<AIConfig> {
+    const response = await this.client.get('/api/ai/config');
+    return response.data;
+  }
+
+  async updateAIConfig(config: AIConfig): Promise<void> {
+    await this.client.put('/api/ai/config', config);
+  }
+
+  async testAIConnection(): Promise<{ status: string; message: string }> {
+    const response = await this.client.post('/api/ai/test');
     return response.data;
   }
 }

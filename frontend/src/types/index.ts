@@ -107,3 +107,11 @@ export interface VoiceParseResponse {
   transcript: string;
   expenses: ParsedExpense[];
 }
+
+export interface AIConfig {
+  enabled: boolean;
+  provider: 'gemini' | 'anthropic' | 'openai';
+  apiKey: string;
+  model: string;
+  hasApiKey?: boolean;
+}

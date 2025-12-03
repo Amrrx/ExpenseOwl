@@ -234,8 +234,8 @@ func (e *RecurringExpense) Validate() error {
 		}
 		e.Tags = cleanedTags
 	}
-	if e.Occurrences < 2 {
-		return fmt.Errorf("at least 2 occurences required to recur")
+	if e.Occurrences < 1 {
+		return fmt.Errorf("at least 1 occurrence required")
 	}
 	if e.StartDate.IsZero() {
 		return fmt.Errorf("start date for recurring expense must be specified")
