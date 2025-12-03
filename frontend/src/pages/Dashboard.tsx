@@ -3,12 +3,13 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import type { TooltipItem } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
 import { Plus, ChevronLeft, ChevronRight, Mic, Square, Loader2 } from 'lucide-react';
-import { Layout, Button, Card, CardBody, Input, Select, TagInput, VoiceModal } from '../components';
+import { Layout, Button, Card, CardBody, Input, Select, TagInput, VoiceModal, ChartSkeleton, CardSkeleton } from '../components';
 import { api } from '../services/api';
 import type { Expense, Config } from '../types';
 import { formatCurrency, COLOR_PALETTE } from '../utils/currency';
 import { formatMonth, getMonthBounds, getISODateWithLocalTime } from '../utils/dates';
 import { useVoiceRecording, type ParsedExpense } from '../hooks/useVoiceRecording';
+import { useToastStore } from '../stores/toastStore';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 ChartJS.defaults.color = '#9ca3af';
@@ -31,7 +32,8 @@ export function Dashboard() {
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<string[]>([]);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
-  const [formMessage, setFormMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const toast = useToastStore();
 
   // Voice recording
   const { state: voiceState, error: voiceError, startRecording, stopRecording } = useVoiceRecording();
@@ -114,7 +116,8 @@ export function Dashboard() {
     });
   };
 
-  const initialize = async () => {
+  const initialize = async (showLoader = true) => {
+    if (showLoader) setIsLoading(true);
     try {
       const config: Config = await api.getConfig();
       setCategories(config.categories);
@@ -138,6 +141,9 @@ export function Dashboard() {
       assignCategoryColors(uniqueCategories);
     } catch (error) {
       console.error('Failed to initialize dashboard:', error);
+      toast.error('Failed to load data');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -190,7 +196,7 @@ export function Dashboard() {
 
       await api.addExpense(expenseData);
 
-      setFormMessage({ type: 'success', text: 'Expense added successfully!' });
+      toast.success('Expense added successfully!');
 
       setFormData({
         name: '',
@@ -201,17 +207,10 @@ export function Dashboard() {
       });
       setSelectedTags(new Set());
 
-      await initialize();
-
-      setTimeout(() => {
-        setFormMessage(null);
-      }, 3000);
+      await initialize(false);
     } catch (error) {
       console.error('Error adding expense:', error);
-      setFormMessage({ type: 'error', text: 'Failed to add expense' });
-      setTimeout(() => {
-        setFormMessage(null);
-      }, 3000);
+      toast.error('Failed to add expense');
     }
   };
 
@@ -226,11 +225,7 @@ export function Dashboard() {
         setShowVoiceModal(true);
       } catch (err) {
         console.error('Voice recording error:', err);
-        setFormMessage({
-          type: 'error',
-          text: voiceError || 'Failed to process voice recording'
-        });
-        setTimeout(() => setFormMessage(null), 3000);
+        toast.error(voiceError || 'Failed to process voice recording');
       }
     }
   };
@@ -264,20 +259,12 @@ export function Dashboard() {
     }
 
     if (successCount > 0) {
-      setFormMessage({
-        type: 'success',
-        text: `Successfully added ${successCount} expense${successCount > 1 ? 's' : ''}!`
-      });
-      await initialize();
-      setTimeout(() => setFormMessage(null), 3000);
+      toast.success(`Successfully added ${successCount} expense${successCount > 1 ? 's' : ''}!`);
+      await initialize(false);
     }
 
     if (failCount > 0) {
-      setFormMessage({
-        type: 'error',
-        text: `Failed to add ${failCount} expense${failCount > 1 ? 's' : ''}`
-      });
-      setTimeout(() => setFormMessage(null), 3000);
+      toast.error(`Failed to add ${failCount} expense${failCount > 1 ? 's' : ''}`);
     }
 
     setShowVoiceModal(false);
@@ -481,22 +468,24 @@ export function Dashboard() {
                 Add Expense
               </Button>
             </form>
-
-            {formMessage && (
-              <div className={`mt-4 p-3 rounded-lg ${
-                formMessage.type === 'success'
-                  ? 'bg-success-50 text-success-800 border border-success-200 dark:bg-success-900/20 dark:text-success-300 dark:border-success-800'
-                  : 'bg-danger-50 text-danger-800 border border-danger-200 dark:bg-danger-900/20 dark:text-danger-300 dark:border-danger-800'
-              }`}>
-                {formMessage.text}
-              </div>
-            )}
           </CardBody>
         </Card>
       )}
 
+      {/* Loading State */}
+      {isLoading && (
+        <>
+          <ChartSkeleton />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        </>
+      )}
+
       {/* No Data */}
-      {!hasExpenses && (
+      {!isLoading && !hasExpenses && (
         <Card>
           <CardBody className="text-center py-12">
             <p className="text-gray-500 dark:text-gray-400">
@@ -507,7 +496,7 @@ export function Dashboard() {
       )}
 
       {/* Chart & Legend */}
-      {hasExpenses && (
+      {!isLoading && hasExpenses && (
         <>
           <Card className="mb-6">
             <CardBody>

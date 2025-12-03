@@ -3,6 +3,12 @@ import { useNavigate, Link } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { Button, Input } from '../components';
+import { useFormValidation, validators } from '../hooks/useFormValidation';
+
+interface LoginForm {
+  email: string;
+  password: string;
+}
 
 export function Login() {
   const navigate = useNavigate();
@@ -10,12 +16,27 @@ export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  const { validateAll, handleBlur, getFieldError, clearErrors } = useFormValidation<LoginForm>({
+    email: [
+      validators.required('Email is required'),
+      validators.email('Please enter a valid email'),
+    ],
+    password: [
+      validators.required('Password is required'),
+      validators.minLength(6, 'Password must be at least 6 characters'),
+    ],
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
 
+    const errors = validateAll({ email, password });
+    if (Object.keys(errors).length > 0) return;
+
     try {
       await login({ email, password });
+      clearErrors();
       navigate('/');
     } catch (err) {
       console.error('Login error:', err);
@@ -51,7 +72,8 @@ export function Login() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
+            onBlur={() => handleBlur('email', email, { email, password })}
+            error={getFieldError('email')}
             placeholder="you@example.com"
           />
 
@@ -60,7 +82,8 @@ export function Login() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required
+            onBlur={() => handleBlur('password', password, { email, password })}
+            error={getFieldError('password')}
             placeholder="••••••••"
           />
 

@@ -3,6 +3,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { Button, Input } from '../components';
+import { useFormValidation, validators } from '../hooks/useFormValidation';
+
+interface RegisterForm {
+  fullName: string;
+  email: string;
+  password: string;
+}
 
 export function Register() {
   const navigate = useNavigate();
@@ -11,16 +18,33 @@ export function Register() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
 
+  const { validateAll, handleBlur, getFieldError, clearErrors } = useFormValidation<RegisterForm>({
+    fullName: [
+      validators.required('Name is required'),
+      validators.minLength(2, 'Name must be at least 2 characters'),
+    ],
+    email: [
+      validators.required('Email is required'),
+      validators.email('Please enter a valid email'),
+    ],
+    password: [
+      validators.required('Password is required'),
+      validators.minLength(8, 'Password must be at least 8 characters'),
+    ],
+  });
+
+  const getFormValues = (): RegisterForm => ({ fullName, email, password });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
 
-    if (password.length < 8) {
-      return;
-    }
+    const errors = validateAll(getFormValues());
+    if (Object.keys(errors).length > 0) return;
 
     try {
       await register({ email, password, full_name: fullName });
+      clearErrors();
       navigate('/');
     } catch (err) {
       console.error('Registration error:', err);
@@ -56,7 +80,8 @@ export function Register() {
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            required
+            onBlur={() => handleBlur('fullName', fullName, getFormValues())}
+            error={getFieldError('fullName')}
             placeholder="John Doe"
           />
 
@@ -65,24 +90,20 @@ export function Register() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
+            onBlur={() => handleBlur('email', email, getFormValues())}
+            error={getFieldError('email')}
             placeholder="you@example.com"
           />
 
-          <div>
-            <Input
-              label="Password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              placeholder="••••••••"
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Minimum 8 characters
-            </p>
-          </div>
+          <Input
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onBlur={() => handleBlur('password', password, getFormValues())}
+            error={getFieldError('password')}
+            placeholder="••••••••"
+          />
 
           <Button
             type="submit"

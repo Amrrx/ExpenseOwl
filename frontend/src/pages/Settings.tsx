@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Download, Upload, Trash2, Plus, Moon, Sun, Monitor, Edit2, X, Check } from 'lucide-react';
-import { Layout, Button, Card, CardHeader, CardBody, CardTitle, Input, Select, Modal, TagInput } from '../components';
+import { Layout, Button, Card, CardHeader, CardBody, CardTitle, Input, Select, Modal, TagInput, SettingsSkeleton } from '../components';
 import { api } from '../services/api';
 import { SUPPORTED_CURRENCIES } from '../utils/currency';
 import type { RecurringExpense } from '../types';
+import { useToastStore } from '../stores/toastStore';
 
 const THEME_OPTIONS = [
   { value: 'system', label: 'System Default', icon: Monitor },
@@ -17,7 +18,8 @@ export function Settings() {
   const [currency, setCurrency] = useState('usd');
   const [startDate, setStartDate] = useState(1);
   const [theme, setTheme] = useState('system');
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const toast = useToastStore();
 
   // Recurring expenses state
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
@@ -43,6 +45,7 @@ export function Settings() {
   }, []);
 
   const loadSettings = async () => {
+    setIsLoading(true);
     try {
       const config = await api.getConfig();
       setCategories(config.categories);
@@ -50,6 +53,9 @@ export function Settings() {
       setStartDate(config.startDate);
     } catch (error) {
       console.error('Failed to load settings:', error);
+      toast.error('Failed to load settings');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -91,17 +97,12 @@ export function Settings() {
     applyTheme(newTheme);
   };
 
-  const showMessage = (type: 'success' | 'error', text: string) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 3000);
-  };
-
   const handleAddCategory = () => {
     const trimmed = newCategory.trim();
     if (!trimmed) return;
 
     if (categories.includes(trimmed)) {
-      showMessage('error', 'Category already exists');
+      toast.error('Category already exists');
       return;
     }
 
@@ -112,7 +113,7 @@ export function Settings() {
 
   const handleDeleteCategory = (category: string) => {
     if (categories.length <= 1) {
-      showMessage('error', 'Must have at least one category');
+      toast.error('Must have at least one category');
       return;
     }
 
@@ -122,27 +123,27 @@ export function Settings() {
   const handleSaveCategories = async () => {
     try {
       await api.updateCategories(categories);
-      showMessage('success', 'Categories saved successfully');
+      toast.success('Categories saved successfully');
     } catch (error) {
-      showMessage('error', 'Failed to save categories');
+      toast.error('Failed to save categories');
     }
   };
 
   const handleSaveCurrency = async () => {
     try {
       await api.updateCurrency(currency);
-      showMessage('success', 'Currency saved successfully');
+      toast.success('Currency saved successfully');
     } catch (error) {
-      showMessage('error', 'Failed to save currency');
+      toast.error('Failed to save currency');
     }
   };
 
   const handleSaveStartDate = async () => {
     try {
       await api.updateStartDate(startDate);
-      showMessage('success', 'Start date saved successfully');
+      toast.success('Start date saved successfully');
     } catch (error) {
-      showMessage('error', 'Failed to save start date');
+      toast.error('Failed to save start date');
     }
   };
 
@@ -164,9 +165,9 @@ export function Settings() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      showMessage('success', 'Expenses exported successfully');
+      toast.success('Expenses exported successfully');
     } catch (error) {
-      showMessage('error', 'Failed to export expenses');
+      toast.error('Failed to export expenses');
     }
   };
 
@@ -187,12 +188,12 @@ export function Settings() {
       });
 
       const result = await response.json();
-      showMessage('success', `Imported ${result.imported || 0} expenses`);
+      toast.success(`Imported ${result.imported || 0} expenses`);
 
       // Clear the input
       e.target.value = '';
     } catch (error) {
-      showMessage('error', 'Failed to import CSV');
+      toast.error('Failed to import CSV');
     }
   };
 
@@ -235,22 +236,22 @@ export function Settings() {
 
   const handleSaveRecurring = async () => {
     if (!recurringForm.name.trim()) {
-      showMessage('error', 'Name is required');
+      toast.error('Name is required');
       return;
     }
 
     if (recurringForm.amount === 0) {
-      showMessage('error', 'Amount cannot be zero');
+      toast.error('Amount cannot be zero');
       return;
     }
 
     if (!recurringForm.category) {
-      showMessage('error', 'Category is required');
+      toast.error('Category is required');
       return;
     }
 
     if (recurringForm.occurrences < 2) {
-      showMessage('error', 'Occurrences must be at least 2');
+      toast.error('Occurrences must be at least 2');
       return;
     }
 
@@ -263,16 +264,16 @@ export function Settings() {
 
       if (editingRecurring) {
         await api.updateRecurringExpense(editingRecurring.id, data, false);
-        showMessage('success', 'Recurring expense updated');
+        toast.success('Recurring expense updated');
       } else {
         await api.addRecurringExpense(data);
-        showMessage('success', 'Recurring expense added');
+        toast.success('Recurring expense added');
       }
 
       await loadRecurringExpenses();
       handleCloseRecurringModal();
     } catch (error) {
-      showMessage('error', editingRecurring ? 'Failed to update recurring expense' : 'Failed to add recurring expense');
+      toast.error(editingRecurring ? 'Failed to update recurring expense' : 'Failed to add recurring expense');
     }
   };
 
@@ -281,12 +282,12 @@ export function Settings() {
 
     try {
       await api.deleteRecurringExpense(deleteRecurringId, deleteAllOccurrences);
-      showMessage('success', deleteAllOccurrences ? 'Recurring expense and all occurrences deleted' : 'Recurring expense deleted');
+      toast.success(deleteAllOccurrences ? 'Recurring expense and all occurrences deleted' : 'Recurring expense deleted');
       await loadRecurringExpenses();
       setDeleteRecurringId(null);
       setDeleteAllOccurrences(false);
     } catch (error) {
-      showMessage('error', 'Failed to delete recurring expense');
+      toast.error('Failed to delete recurring expense');
     }
   };
 
@@ -296,16 +297,9 @@ export function Settings() {
 
   return (
     <Layout>
-      {message && (
-        <div className={`mb-6 p-4 rounded-lg ${
-          message.type === 'success'
-            ? 'bg-success-50 text-success-800 border border-success-200 dark:bg-success-900/20 dark:text-success-300 dark:border-success-800'
-            : 'bg-danger-50 text-danger-800 border border-danger-200 dark:bg-danger-900/20 dark:text-danger-300 dark:border-danger-800'
-        }`}>
-          {message.text}
-        </div>
-      )}
-
+      {isLoading ? (
+        <SettingsSkeleton />
+      ) : (
       <div className="space-y-6">
         {/* Theme */}
         <Card>
@@ -535,6 +529,7 @@ export function Settings() {
           </CardBody>
         </Card>
       </div>
+      )}
 
       {/* Recurring Expense Modal */}
       <Modal

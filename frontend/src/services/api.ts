@@ -10,6 +10,7 @@ import type {
   SyncPushRequest,
   SyncPushResponse,
 } from '../types';
+import { useToastStore } from '../stores/toastStore';
 
 const API_BASE_URL = '';
 
@@ -60,7 +61,13 @@ class ApiService {
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
             localStorage.removeItem('user');
-            window.location.href = '/login';
+
+            useToastStore.getState().warning('Session expired. Please login again.');
+
+            setTimeout(() => {
+              window.location.href = '/login';
+            }, 1500);
+
             return Promise.reject(refreshError);
           }
         }

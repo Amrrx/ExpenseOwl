@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
+import { PageTransition } from './PageTransition';
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,7 +13,9 @@ export function Layout({ children }: LayoutProps) {
       <Header />
       <main className="pt-16 pb-28">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-          {children}
+          <PageTransition>
+            {children}
+          </PageTransition>
         </div>
       </main>
       <BottomNav />

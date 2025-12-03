@@ -2,11 +2,13 @@ import { LogOut, Moon, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useState, useEffect } from 'react';
+import { ConfirmModal } from './Modal';
 
 export function Header() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const [isDark, setIsDark] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || 'system';
@@ -21,7 +23,11 @@ export function Header() {
     setIsDark(!isDark);
   };
 
-  const handleLogout = async () => {
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const handleLogoutConfirm = async () => {
     await logout();
     navigate('/login');
   };
@@ -53,7 +59,7 @@ export function Header() {
               {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <button
-              onClick={handleLogout}
+              onClick={handleLogoutClick}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-danger-600 dark:hover:text-danger-400 hover:bg-danger-50 dark:hover:bg-danger-950/50 rounded-xl transition-colors"
             >
               <LogOut className="w-4 h-4" />
@@ -62,6 +68,16 @@ export function Header() {
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={handleLogoutConfirm}
+        title="Logout"
+        message="Are you sure you want to logout?"
+        confirmText="Logout"
+        cancelText="Cancel"
+      />
     </header>
   );
 }

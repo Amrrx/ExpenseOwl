@@ -4,11 +4,12 @@
 - [ ] Testing and bug fixes for the new React frontend
 
 ## Priority 1 - Polish
-- [ ] Add loading states/skeleton screens during data fetches
-- [ ] Add toast notification system for success/error feedback
-- [ ] Improve form validation with inline error messages
-- [ ] Add confirmation before logout
-- [ ] Handle session expiry gracefully (redirect to login)
+- [x] Add loading states/skeleton screens during data fetches
+- [x] Add toast notification system for success/error feedback
+- [x] Improve form validation with inline error messages
+- [x] Add confirmation before logout
+- [x] Handle session expiry gracefully (redirect to login)
+- [x] Add smooth page transitions between routes
 
 ## Priority 2 - Features
 - [ ] Category drag-and-drop reordering in Settings
