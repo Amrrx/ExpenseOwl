@@ -1,7 +1,7 @@
 # ExpenseOwl TODO
 
 ## In Progress
-- [ ] Testing and bug fixes for the new React frontend
+- [ ] Final testing and bug fixes
 
 ## Priority 1 - Polish
 - [x] Add loading states/skeleton screens during data fetches
@@ -20,15 +20,17 @@
 - [x] Recurring expense delete with "Delete Future" / "Delete All" options
 
 ## Priority 3 - UX Improvements
-- [ ] Keyboard shortcuts (Ctrl+N for new expense, etc.)
-- [ ] Expense search/filter functionality
-- [ ] Mobile swipe gestures for navigation
-- [ ] Pull-to-refresh on mobile
-- [ ] Haptic feedback on mobile actions
+- [x] Keyboard shortcuts (Ctrl+N for new expense, Escape to close, Arrow keys for navigation)
+- [x] Expense search/filter functionality
+- [x] Mobile swipe gestures for chart carousel
+- [x] Pull-to-refresh on mobile
+- [x] Haptic feedback on mobile actions
 
 ## Priority 4 - Data & Analytics
-- [ ] Line chart for expense trends over time
-- [ ] Monthly comparison view
+- [x] Donut chart with center total (replaced pie chart)
+- [x] 6-month spending trend bar chart
+- [x] Spending trend indicator (% change vs previous month)
+- [x] Top 5 expenses list
 - [ ] Category spending limits/budgets
 - [ ] Export to PDF format
 - [ ] Export to Excel format
@@ -44,9 +46,11 @@
 - [x] React frontend with TypeScript and Vite
 - [x] Tailwind CSS with dark mode support
 - [x] JWT authentication with token refresh
-- [x] Dashboard with pie chart and expense form
-- [x] Table page with CRUD operations
+- [x] Dashboard with donut chart, trend chart, and expense form
+- [x] Table page with CRUD operations and search/filter
 - [x] Settings page (theme, categories, currency, start date, recurring, import/export)
 - [x] Voice recording for expense input
 - [x] Backend UPSERT fix for settings persistence
 - [x] Backend pq.Array fix for categories storage
+- [x] Mobile-first UX redesign with swipeable chart carousel
+- [x] FAB with React Portal for fixed positioning

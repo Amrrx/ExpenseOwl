@@ -7,6 +7,7 @@
 - ✅ Created `utils/dates.ts` - Date utilities and month bounds calculation
 - ✅ Created `services/api.ts` - API service with JWT auth and token refresh
 - ✅ Created `stores/authStore.ts` - Zustand auth state management
+- ✅ Created `stores/toastStore.ts` - Toast notification state management
 
 ### Shared Components
 - ✅ `components/Layout.tsx` - Main layout with header and bottom nav
@@ -20,9 +21,18 @@
 - ✅ `components/Modal.tsx` - Base modal component
 - ✅ `components/ConfirmModal.tsx` - Confirmation dialog
 - ✅ `components/VoiceModal.tsx` - Voice recording review modal
+- ✅ `components/Toast.tsx` - Toast notifications with ToastContainer
+- ✅ `components/Skeleton.tsx` - Loading skeleton components (Chart, Card, Table, Form)
 
 ### Hooks
 - ✅ `hooks/useVoiceRecording.ts` - Voice recording with API integration
+- ✅ `hooks/useDragReorder.ts` - Drag-and-drop reordering for lists
+- ✅ `hooks/useKeyboardShortcuts.ts` - Keyboard shortcuts with modifier keys
+- ✅ `hooks/useSwipeGestures.ts` - Mobile swipe gesture detection
+- ✅ `hooks/usePullToRefresh.ts` - Pull-to-refresh for mobile
+
+### Utils
+- ✅ `utils/haptics.ts` - Haptic feedback for mobile actions
 
 ### Pages
 - ✅ `pages/Login.tsx` - Login form with JWT auth
@@ -43,21 +53,23 @@
 ## Remaining Tasks
 
 ### Priority 1 - Polish
-- [ ] Add loading states/skeletons
-- [ ] Improve error handling with toast notifications
-- [ ] Add form validation feedback
-- [ ] Mobile swipe gestures for navigation
+- ✅ Add loading states/skeletons
+- ✅ Improve error handling with toast notifications
+- ✅ Add form validation feedback
+- ✅ Mobile swipe gestures for navigation
 
 ### Priority 2 - Features
-- [ ] Category drag-and-drop reordering
-- [ ] AI Voice configuration (provider, API key, model)
-- [ ] Import from old ExpenseOwl format
+- ✅ Category drag-and-drop reordering
+- ✅ AI Voice configuration (provider, API key, model)
+- ✅ Import from old ExpenseOwl format
 - [ ] PWA service worker for offline support
 
-### Priority 3 - Nice to Have
-- [ ] Keyboard shortcuts
-- [ ] Expense search/filter
-- [ ] Data visualization improvements
+### Priority 3 - UX Improvements
+- ✅ Keyboard shortcuts (Ctrl+N, Escape, Arrow keys)
+- ✅ Expense search/filter by name, category, tags
+- ✅ Pull-to-refresh on mobile
+- ✅ Haptic feedback on mobile actions
+- ✅ Data visualization improvements (donut chart, 6-month trend, % change, top expenses)
 - [ ] Export to different formats (PDF, Excel)
 
 ## Tech Stack

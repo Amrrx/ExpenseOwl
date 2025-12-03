@@ -1,19 +1,29 @@
-import { useEffect, useState } from 'react';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { useEffect, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
 import type { TooltipItem } from 'chart.js';
-import { Pie } from 'react-chartjs-2';
-import { Plus, ChevronLeft, ChevronRight, Mic, Square, Loader2 } from 'lucide-react';
+import { Doughnut, Bar } from 'react-chartjs-2';
+import { Plus, ChevronLeft, ChevronRight, Mic, Square, Loader2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Layout, Button, Card, CardBody, Input, Select, TagInput, VoiceModal, ChartSkeleton, CardSkeleton } from '../components';
 import { api } from '../services/api';
 import type { Expense, Config } from '../types';
 import { formatCurrency, COLOR_PALETTE } from '../utils/currency';
 import { formatMonth, getMonthBounds, getISODateWithLocalTime } from '../utils/dates';
 import { useVoiceRecording, type ParsedExpense } from '../hooks/useVoiceRecording';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useSwipeGestures } from '../hooks/useSwipeGestures';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { useToastStore } from '../stores/toastStore';
+import { hapticLight, hapticSuccess, hapticError } from '../utils/haptics';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 ChartJS.defaults.color = '#9ca3af';
 ChartJS.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+interface MonthlyData {
+  month: string;
+  total: number;
+}
 
 interface CategoryData {
   category: string;
@@ -47,6 +57,51 @@ export function Dashboard() {
     amount: '',
     date: new Date().toISOString().split('T')[0],
     reportGain: false,
+  });
+
+  // Keyboard shortcuts
+  const shortcuts = useMemo(() => [
+    { key: 'n', ctrl: true, handler: () => setShowExpenseForm(true) },
+    { key: 'Escape', handler: () => {
+      setShowExpenseForm(false);
+      setShowVoiceModal(false);
+    }},
+    { key: 'ArrowLeft', handler: () => setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(newDate.getMonth() - 1);
+      return newDate;
+    })},
+    { key: 'ArrowRight', handler: () => setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(newDate.getMonth() + 1);
+      return newDate;
+    })},
+  ], []);
+  useKeyboardShortcuts(shortcuts);
+
+  // Chart view state (0: donut, 1: trend, 2: top expenses)
+  const [chartView, setChartView] = useState(0);
+  const totalViews = 3;
+
+  // Swipe gestures for chart views
+  useSwipeGestures({
+    onSwipeLeft: () => {
+      hapticLight();
+      setChartView(prev => Math.min(prev + 1, totalViews - 1));
+    },
+    onSwipeRight: () => {
+      hapticLight();
+      setChartView(prev => Math.max(prev - 1, 0));
+    },
+  });
+
+  // Pull-to-refresh
+  const { isRefreshing, pullDistance, isPulling } = usePullToRefresh({
+    onRefresh: async () => {
+      hapticLight();
+      await initialize(false);
+    },
+    threshold: 80,
   });
 
   useEffect(() => {
@@ -104,6 +159,50 @@ export function Dashboard() {
       .reduce((sum, exp) => sum + Math.abs(exp.amount), 0);
   };
 
+  const getMonthlyTrend = (expenses: Expense[], months: number = 6): MonthlyData[] => {
+    const result: MonthlyData[] = [];
+    const now = new Date(currentDate);
+
+    for (let i = months - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setMonth(date.getMonth() - i);
+      const { start, end } = getMonthBounds(date, startDate);
+
+      const monthTotal = expenses
+        .filter(exp => {
+          const expDate = new Date(exp.date);
+          return exp.amount < 0 && expDate >= start && expDate < end;
+        })
+        .reduce((sum, exp) => sum + Math.abs(exp.amount), 0);
+
+      result.push({
+        month: date.toLocaleDateString('en-US', { month: 'short' }),
+        total: monthTotal,
+      });
+    }
+    return result;
+  };
+
+  const getPreviousMonthExpenses = (expenses: Expense[]): number => {
+    const prevDate = new Date(currentDate);
+    prevDate.setMonth(prevDate.getMonth() - 1);
+    const { start, end } = getMonthBounds(prevDate, startDate);
+
+    return expenses
+      .filter(exp => {
+        const expDate = new Date(exp.date);
+        return exp.amount < 0 && expDate >= start && expDate < end;
+      })
+      .reduce((sum, exp) => sum + Math.abs(exp.amount), 0);
+  };
+
+  const getTopExpenses = (expenses: Expense[], limit: number = 5): Expense[] => {
+    return expenses
+      .filter(exp => exp.amount < 0)
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+      .slice(0, limit);
+  };
+
   const toggleCategory = (category: string) => {
     setDisabledCategories(prev => {
       const newSet = new Set(prev);
@@ -148,6 +247,7 @@ export function Dashboard() {
   };
 
   const handlePrevMonth = () => {
+    hapticLight();
     setCurrentDate(prev => {
       const newDate = new Date(prev);
       newDate.setMonth(newDate.getMonth() - 1);
@@ -156,6 +256,7 @@ export function Dashboard() {
   };
 
   const handleNextMonth = () => {
+    hapticLight();
     setCurrentDate(prev => {
       const newDate = new Date(prev);
       newDate.setMonth(newDate.getMonth() + 1);
@@ -196,6 +297,7 @@ export function Dashboard() {
 
       await api.addExpense(expenseData);
 
+      hapticSuccess();
       toast.success('Expense added successfully!');
 
       setFormData({
@@ -210,6 +312,7 @@ export function Dashboard() {
       await initialize(false);
     } catch (error) {
       console.error('Error adding expense:', error);
+      hapticError();
       toast.error('Failed to add expense');
     }
   };
@@ -298,6 +401,16 @@ export function Dashboard() {
     .filter(exp => exp.amount < 0 && !disabledCategories.has(exp.category))
     .reduce((sum, exp) => sum + Math.abs(exp.amount), 0);
 
+  // Trend and analytics data
+  const monthlyTrend = getMonthlyTrend(allExpenses, 6);
+  const previousMonthTotal = getPreviousMonthExpenses(allExpenses);
+  const topExpenses = getTopExpenses(monthExpenses, 5);
+
+  // Calculate % change vs previous month
+  const percentChange = previousMonthTotal > 0
+    ? ((expenseTotal - previousMonthTotal) / previousMonthTotal) * 100
+    : 0;
+
   const chartData = {
     labels: categoryData.map(c => c.category),
     datasets: [{
@@ -311,13 +424,14 @@ export function Dashboard() {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    cutout: '65%',
     plugins: {
       legend: {
         display: false
       },
       tooltip: {
         callbacks: {
-          label: (context: TooltipItem<'pie'>) => {
+          label: (context: TooltipItem<'doughnut'>) => {
             const value = context.parsed;
             const total = context.dataset.data.reduce((sum: number, val) => sum + (val as number), 0);
             const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
@@ -328,8 +442,54 @@ export function Dashboard() {
     }
   };
 
+  // Trend bar chart data
+  const trendChartData = {
+    labels: monthlyTrend.map(m => m.month),
+    datasets: [{
+      data: monthlyTrend.map(m => m.total),
+      backgroundColor: monthlyTrend.map((_, i) =>
+        i === monthlyTrend.length - 1 ? '#6366f1' : '#e5e7eb'
+      ),
+      borderRadius: 4,
+      barThickness: 24,
+    }]
+  };
+
+  const trendChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (context: TooltipItem<'bar'>) => formatCurrency(context.parsed.y, currentCurrency)
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { display: false },
+      },
+      y: {
+        display: false,
+        grid: { display: false },
+      }
+    }
+  };
+
   return (
     <Layout>
+      {/* Pull-to-refresh indicator */}
+      {(isPulling || isRefreshing) && (
+        <div
+          className="flex items-center justify-center py-4 transition-all duration-200"
+          style={{ height: isRefreshing ? 48 : pullDistance }}
+        >
+          <div className={`w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full ${isRefreshing ? 'animate-spin' : ''}`} />
+        </div>
+      )}
+
       {/* Month Navigation */}
       <Card className="mb-6">
         <CardBody className="!py-3">
@@ -495,102 +655,126 @@ export function Dashboard() {
         </Card>
       )}
 
-      {/* Chart & Legend */}
+      {/* Compact Cashflow Summary */}
       {!isLoading && hasExpenses && (
         <>
-          <Card className="mb-6">
-            <CardBody>
-              <div className="h-[280px] flex items-center justify-center mb-6">
-                <Pie data={chartData} options={chartOptions} />
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide">Income</div>
+              <div className="text-sm font-bold text-success-600 dark:text-success-400">
+                {formatCurrency(income, currentCurrency)}
               </div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide">Expenses</div>
+              <div className="text-sm font-bold text-danger-600 dark:text-danger-400">
+                {formatCurrency(expenseTotal, currentCurrency)}
+              </div>
+              {previousMonthTotal > 0 && (
+                <div className={`flex items-center justify-center gap-0.5 text-[10px] ${
+                  percentChange > 0 ? 'text-danger-500' : percentChange < 0 ? 'text-success-500' : 'text-gray-400'
+                }`}>
+                  {percentChange > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : percentChange < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : <Minus className="w-2.5 h-2.5" />}
+                  {Math.abs(percentChange).toFixed(0)}%
+                </div>
+              )}
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide">Balance</div>
+              <div className={`text-sm font-bold ${balance >= 0 ? 'text-success-600 dark:text-success-400' : 'text-danger-600 dark:text-danger-400'}`}>
+                {formatCurrency(balance, currentCurrency)}
+              </div>
+            </div>
+          </div>
 
-              <div className="space-y-2">
-                {sortedCategories.map(category => {
-                  const color = categoryColors[category];
-                  const categoryDataItem = categoryMap.get(category);
-                  const percentage = categoryDataItem ? categoryDataItem.percentage.toFixed(1) : '0.0';
-                  const amount = categoryDataItem ? categoryDataItem.total : 0;
-                  const isDisabled = disabledCategories.has(category);
-
-                  return (
-                    <button
-                      key={category}
-                      onClick={() => toggleCategory(category)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${
-                        isDisabled
-                          ? 'opacity-40 bg-gray-100 dark:bg-gray-800'
-                          : 'bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      <div
-                        className="w-6 h-6 rounded flex-shrink-0"
-                        style={{ backgroundColor: color }}
-                      />
-                      <div className="flex-1 min-w-0 text-left">
-                        <div className="flex justify-between items-baseline">
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {category} ({percentage}%)
-                          </span>
-                          <span className="text-sm text-gray-600 dark:text-gray-400 font-semibold">
-                            {formatCurrency(amount, currentCurrency)}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-900 dark:text-white">Total:</span>
-                    <span className="font-bold text-gray-900 dark:text-white">
-                      {formatCurrency(activeTotalExpenses, currentCurrency)}
-                    </span>
+          {/* Swipeable Chart Views */}
+          <Card className="mb-4 overflow-hidden">
+            <CardBody className="!p-4">
+              {/* View 0: Donut Chart with Legend */}
+              {chartView === 0 && (
+                <div className="animate-fade-in">
+                  <div className="relative h-[200px] flex items-center justify-center mb-4">
+                    <Doughnut data={chartData} options={chartOptions} />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400">Total</span>
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">
+                        {formatCurrency(activeTotalExpenses, currentCurrency)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {sortedCategories.slice(0, 6).map(category => {
+                      const color = categoryColors[category];
+                      const categoryDataItem = categoryMap.get(category);
+                      const percentage = categoryDataItem ? categoryDataItem.percentage.toFixed(0) : '0';
+                      const isDisabled = disabledCategories.has(category);
+                      return (
+                        <button
+                          key={category}
+                          onClick={() => toggleCategory(category)}
+                          className={`flex items-center gap-2 p-2 rounded text-left text-xs ${
+                            isDisabled ? 'opacity-40' : ''
+                          }`}
+                        >
+                          <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
+                          <span className="truncate text-gray-700 dark:text-gray-300">{category}</span>
+                          <span className="ml-auto text-gray-500">{percentage}%</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
+              )}
+
+              {/* View 1: 6-Month Trend */}
+              {chartView === 1 && (
+                <div className="animate-fade-in">
+                  <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-3">6-Month Trend</h3>
+                  <div className="h-[240px]">
+                    <Bar data={trendChartData} options={trendChartOptions} />
+                  </div>
+                </div>
+              )}
+
+              {/* View 2: Top Expenses */}
+              {chartView === 2 && (
+                <div className="animate-fade-in">
+                  <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-3">Top Expenses</h3>
+                  <div className="space-y-2">
+                    {topExpenses.length > 0 ? topExpenses.map((exp, index) => (
+                      <div key={exp.id} className="flex items-center gap-2 py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                        <span className="text-xs font-bold text-gray-400 w-4">{index + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{exp.name}</div>
+                          <div className="text-[10px] text-gray-500">{exp.category}</div>
+                        </div>
+                        <span className="text-sm font-semibold text-danger-600 dark:text-danger-400">
+                          {formatCurrency(Math.abs(exp.amount), currentCurrency)}
+                        </span>
+                      </div>
+                    )) : (
+                      <p className="text-sm text-gray-500 text-center py-8">No expenses yet</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Dot Indicators */}
+              <div className="flex justify-center gap-2 mt-4">
+                {[0, 1, 2].map(i => (
+                  <button
+                    key={i}
+                    onClick={() => { hapticLight(); setChartView(i); }}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      chartView === i
+                        ? 'bg-primary-500 w-4'
+                        : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                  />
+                ))}
               </div>
             </CardBody>
           </Card>
-
-          {/* Cashflow Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="border-l-4 border-success-500">
-              <CardBody>
-                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                  Income
-                </div>
-                <div className="text-2xl font-bold text-success-600 dark:text-success-400">
-                  {formatCurrency(income, currentCurrency)}
-                </div>
-              </CardBody>
-            </Card>
-
-            <Card className="border-l-4 border-danger-500">
-              <CardBody>
-                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                  Expenses
-                </div>
-                <div className="text-2xl font-bold text-danger-600 dark:text-danger-400">
-                  {formatCurrency(expenseTotal, currentCurrency)}
-                </div>
-              </CardBody>
-            </Card>
-
-            <Card className="border-l-4 border-primary-500">
-              <CardBody>
-                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                  Balance
-                </div>
-                <div className={`text-2xl font-bold ${
-                  balance >= 0
-                    ? 'text-success-600 dark:text-success-400'
-                    : 'text-danger-600 dark:text-danger-400'
-                }`}>
-                  {formatCurrency(balance, currentCurrency)}
-                </div>
-              </CardBody>
-            </Card>
-          </div>
         </>
       )}
 
@@ -609,16 +793,19 @@ export function Dashboard() {
         onReRecord={handleVoiceReRecord}
       />
 
-      {/* FAB for mobile */}
-      <button
-        onClick={() => setShowExpenseForm(!showExpenseForm)}
-        className={`fixed bottom-24 right-6 w-14 h-14 bg-gradient-to-br from-primary-600 to-primary-700 text-white rounded-full shadow-xl hover:shadow-2xl flex items-center justify-center transition-all duration-300 z-40 md:hidden ${
-          showExpenseForm ? 'rotate-45' : ''
-        }`}
-        aria-label="Add expense"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {/* FAB for mobile - rendered via portal to escape transform parent */}
+      {createPortal(
+        <button
+          onClick={() => setShowExpenseForm(!showExpenseForm)}
+          className={`fixed bottom-24 right-6 w-14 h-14 bg-gradient-to-br from-primary-600 to-primary-700 text-white rounded-full shadow-xl hover:shadow-2xl flex items-center justify-center transition-all duration-300 z-40 md:hidden ${
+            showExpenseForm ? 'rotate-45' : ''
+          }`}
+          aria-label="Add expense"
+        >
+          <Plus className="w-6 h-6" />
+        </button>,
+        document.body
+      )}
     </Layout>
   );
 }

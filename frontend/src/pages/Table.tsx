@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Edit2, Trash2 } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { ChevronLeft, ChevronRight, Edit2, Trash2, Search, X } from 'lucide-react';
 import { Layout, Button, Card, CardBody, Input, Select, TagInput, ConfirmModal, TableSkeleton } from '../components';
 import { api } from '../services/api';
 import type { Expense, Config } from '../types';
 import { formatCurrency } from '../utils/currency';
 import { formatMonth, getMonthBounds, getISODateWithLocalTime, formatDateFromUTC } from '../utils/dates';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { useToastStore } from '../stores/toastStore';
+import { hapticLight, hapticSuccess, hapticError } from '../utils/haptics';
 
 export function Table() {
   const [currentCurrency, setCurrentCurrency] = useState('usd');
@@ -32,13 +35,45 @@ export function Table() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
 
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+
+  // Keyboard shortcuts
+  const shortcuts = useMemo(() => [
+    { key: 'Escape', handler: () => {
+      setEditId(null);
+      setDeleteModalOpen(false);
+    }},
+    { key: 'ArrowLeft', handler: () => !showAll && setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(newDate.getMonth() - 1);
+      return newDate;
+    })},
+    { key: 'ArrowRight', handler: () => !showAll && setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(newDate.getMonth() + 1);
+      return newDate;
+    })},
+  ], [showAll]);
+  useKeyboardShortcuts(shortcuts);
+
+  // Pull-to-refresh
+  const { isRefreshing, pullDistance, isPulling } = usePullToRefresh({
+    onRefresh: async () => {
+      hapticLight();
+      await initialize(false);
+    },
+    threshold: 80,
+  });
+
   useEffect(() => {
     initialize();
   }, []);
 
   useEffect(() => {
     updateTable();
-  }, [allExpenses, currentDate, showAll, startDate]);
+  }, [allExpenses, currentDate, showAll, startDate, searchQuery, categoryFilter]);
 
   const initialize = async (showLoader = true) => {
     if (showLoader) setIsLoading(true);
@@ -68,20 +103,39 @@ export function Table() {
   };
 
   const updateTable = () => {
-    if (showAll) {
-      const sorted = [...allExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setExpensesForTable(sorted);
-    } else {
+    let filtered = allExpenses;
+
+    // Apply date filter (unless showing all)
+    if (!showAll) {
       const { start, end } = getMonthBounds(currentDate, startDate);
-      const filtered = allExpenses.filter((exp) => {
+      filtered = filtered.filter((exp) => {
         const expDate = new Date(exp.date);
         return expDate >= start && expDate < end;
       });
-      setExpensesForTable(filtered);
     }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((exp) =>
+        exp.name.toLowerCase().includes(query) ||
+        exp.category.toLowerCase().includes(query) ||
+        exp.tags?.some(tag => tag.toLowerCase().includes(query))
+      );
+    }
+
+    // Apply category filter
+    if (categoryFilter) {
+      filtered = filtered.filter((exp) => exp.category === categoryFilter);
+    }
+
+    // Sort by date descending
+    const sorted = [...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    setExpensesForTable(sorted);
   };
 
   const handlePrevMonth = () => {
+    hapticLight();
     setCurrentDate((prev) => {
       const newDate = new Date(prev);
       newDate.setMonth(newDate.getMonth() - 1);
@@ -90,6 +144,7 @@ export function Table() {
   };
 
   const handleNextMonth = () => {
+    hapticLight();
     setCurrentDate((prev) => {
       const newDate = new Date(prev);
       newDate.setMonth(newDate.getMonth() + 1);
@@ -137,12 +192,14 @@ export function Table() {
     if (!id) return;
     try {
       await api.deleteExpense(id);
+      hapticSuccess();
       toast.success('Expense deleted');
       await initialize(false);
       setDeleteModalOpen(false);
       setExpenseToDelete(null);
     } catch (error) {
       console.error('Error deleting expense:', error);
+      hapticError();
       toast.error('Failed to delete expense');
     }
   };
@@ -167,9 +224,11 @@ export function Table() {
     try {
       if (editId) {
         await api.updateExpense(editId, expenseData);
+        hapticSuccess();
         toast.success('Expense updated successfully!');
       } else {
         await api.addExpense(expenseData);
+        hapticSuccess();
         toast.success('Expense added successfully!');
       }
 
@@ -186,6 +245,7 @@ export function Table() {
       await initialize(false);
     } catch (error: any) {
       console.error('Error saving expense:', error);
+      hapticError();
       toast.error(error.response?.data?.error || 'Failed to save expense');
     }
   };
@@ -194,6 +254,16 @@ export function Table() {
 
   return (
     <Layout>
+      {/* Pull-to-refresh indicator */}
+      {(isPulling || isRefreshing) && (
+        <div
+          className="flex items-center justify-center py-4 transition-all duration-200"
+          style={{ height: isRefreshing ? 48 : pullDistance }}
+        >
+          <div className={`w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full ${isRefreshing ? 'animate-spin' : ''}`} />
+        </div>
+      )}
+
       {/* Month Navigation */}
       {!showAll && (
         <Card className="mb-6">
@@ -227,6 +297,59 @@ export function Table() {
           </span>
         </label>
       </div>
+
+      {/* Search and Filter */}
+      <Card className="mb-6">
+        <CardBody className="!py-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, category, or tag..."
+                className="w-full pl-9 pr-9 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="">All Categories</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            {(searchQuery || categoryFilter) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery('');
+                  setCategoryFilter('');
+                }}
+              >
+                Clear Filters
+              </Button>
+            )}
+          </div>
+          {(searchQuery || categoryFilter) && (
+            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Showing {expensesForTable.length} result{expensesForTable.length !== 1 ? 's' : ''}
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
       {/* Form */}
       <Card className="mb-6">
