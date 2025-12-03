@@ -13,9 +13,9 @@
 
 ## Priority 2 - Features
 - [x] Category drag-and-drop reordering in Settings
-- [ ] AI Voice configuration UI (provider, API key, model selection)
-- [ ] Import from old ExpenseOwl format (pre-v4.0)
-- [ ] PWA service worker for offline support
+- [x] AI Voice configuration UI (provider, API key, model selection)
+- [x] Import from old ExpenseOwl format (pre-v4.0)
+- [x] PWA service worker for offline support
 - [x] Recurring expense edit modal with "Update Future" / "Update All" options
 - [x] Recurring expense delete with "Delete Future" / "Delete All" options
 
