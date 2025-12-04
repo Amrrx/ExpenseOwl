@@ -11,6 +11,9 @@ data/*.json
 !mobile/*.json
 !mobile/tsconfig.json
 
+# Allow frontend config files
+!frontend/*.json
+
 # Environment files
 .env
 .env.*
