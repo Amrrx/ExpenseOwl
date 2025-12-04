@@ -14,7 +14,7 @@ import type {
 } from '../types';
 
 // TODO: Configure this based on environment
-const API_BASE_URL = __DEV__ ? 'http://192.168.1.100:8080' : 'https://your-production-url.com';
+const API_BASE_URL = __DEV__ ? 'http://192.168.1.19:8080' : 'https://your-production-url.com';
 
 const TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';

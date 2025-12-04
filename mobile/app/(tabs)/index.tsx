@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-// import { PieChart, BarChart } from 'react-native-gifted-charts';
+import { PieChart, BarChart } from 'react-native-gifted-charts';
 import { useTheme, spacing, fontSize, chartColors } from '../../theme';
 import { Card, FAB, ExpenseForm } from '../../components';
 import { api } from '../../services/api';
@@ -248,9 +248,23 @@ export default function DashboardScreen() {
             {/* Donut Chart */}
             {chartView === 0 && (
               <View style={styles.chartContainer}>
-                <Text style={{ color: colors.text, textAlign: 'center', padding: 20 }}>
-                  Chart: {formatCurrency(expenseTotal, currency)}
-                </Text>
+                <View style={styles.pieWrapper}>
+                  <PieChart
+                    data={pieData}
+                    donut
+                    radius={100}
+                    innerRadius={60}
+                    innerCircleColor={colors.surface}
+                    centerLabelComponent={() => (
+                      <View style={styles.centerLabel}>
+                        <Text style={[styles.centerLabelSmall, { color: colors.textSecondary }]}>Total</Text>
+                        <Text style={[styles.centerLabelValue, { color: colors.text }]}>
+                          {formatCurrency(expenseTotal, currency)}
+                        </Text>
+                      </View>
+                    )}
+                  />
+                </View>
                 <View style={styles.legend}>
                   {categoryBreakdown.slice(0, 6).map(item => (
                     <View key={item.category} style={styles.legendItem}>
@@ -271,9 +285,20 @@ export default function DashboardScreen() {
             {chartView === 1 && (
               <View style={styles.trendContainer}>
                 <Text style={[styles.chartTitle, { color: colors.textSecondary }]}>6-Month Trend</Text>
-                <Text style={{ color: colors.text, textAlign: 'center', padding: 20 }}>
-                  Trend chart placeholder
-                </Text>
+                <BarChart
+                  data={barData}
+                  barWidth={32}
+                  spacing={20}
+                  roundedTop
+                  roundedBottom
+                  xAxisThickness={0}
+                  yAxisThickness={0}
+                  yAxisTextStyle={{ color: colors.textSecondary, fontSize: 10 }}
+                  xAxisLabelTextStyle={{ color: colors.textSecondary, fontSize: 10 }}
+                  noOfSections={4}
+                  maxValue={maxTrend * 1.2}
+                  hideRules
+                />
               </View>
             )}
 

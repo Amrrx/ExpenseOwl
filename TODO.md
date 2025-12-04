@@ -42,6 +42,20 @@
 - [ ] Optimize bundle size
 - [ ] Add error boundary components
 
+## Mobile App (React Native/Expo)
+- [x] Basic app structure with expo-router
+- [x] Authentication flow (login/register screens)
+- [x] Auth guard (redirect to login when unauthenticated)
+- [x] Dashboard with donut chart and bar chart
+- [x] Expense form with category selection
+- [x] Development build (expo-dev-client) for Android
+- [x] Disabled New Architecture to fix navigation crash
+- [ ] Voice expense entry UI
+- [ ] AI config settings screen
+- [ ] Sync status indicator
+- [ ] Offline support with local storage
+- [ ] iOS build and testing
+
 ## Completed
 - [x] React frontend with TypeScript and Vite
 - [x] Tailwind CSS with dark mode support
