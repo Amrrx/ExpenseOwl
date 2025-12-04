@@ -5,7 +5,11 @@ main
 
 # Data directories
 data/
-*.json
+data/*.json
+
+# Allow mobile config files
+!mobile/*.json
+!mobile/tsconfig.json
 
 # Environment files
 .env
