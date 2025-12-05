@@ -5,3 +5,5 @@ export { ToastContainer } from './Toast';
 export { FAB } from './FAB';
 export { ExpenseForm } from './ExpenseForm';
 export { Loading } from './Loading';
+export { SyncIndicator } from './SyncIndicator';
+export { VoiceRecorder } from './VoiceRecorder';

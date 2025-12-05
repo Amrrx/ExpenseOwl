@@ -1,16 +1,21 @@
-import { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { PieChart, BarChart } from 'react-native-gifted-charts';
 import { useTheme, spacing, fontSize, chartColors } from '../../theme';
-import { Card, FAB, ExpenseForm } from '../../components';
+import { Card, FAB, ExpenseForm, SyncIndicator } from '../../components';
 import { api } from '../../services/api';
 import { useToastStore } from '../../stores/toastStore';
+import { useSyncStore } from '../../stores/syncStore';
+import { useOfflineStore } from '../../stores/offlineStore';
 import { formatCurrency, COLOR_PALETTE } from '../../utils/currency';
 import { formatMonth, getMonthBounds } from '../../utils/dates';
 import { hapticSelection } from '../../utils/haptics';
 import type { Expense, Config } from '../../types';
+
+// Get store state without triggering re-renders
+const getOfflineState = () => useOfflineStore.getState();
 
 interface CategoryData {
   category: string;
@@ -22,6 +27,12 @@ interface CategoryData {
 export default function DashboardScreen() {
   const { colors, isDark } = useTheme();
   const toast = useToastStore();
+  const syncStore = useSyncStore();
+  // Only subscribe to isOnline to avoid re-render loops from cached data changes
+  const isOnline = useOfflineStore(state => state.isOnline);
+  const offlineQueue = useOfflineStore(state => state.offlineQueue);
+  const appState = useRef(AppState.currentState);
+  const hasLoadedRef = useRef(false);
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
@@ -31,24 +42,64 @@ export default function DashboardScreen() {
   const [chartView, setChartView] = useState(0);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
 
+  useEffect(() => {
+    syncStore.initialize();
+    useOfflineStore.getState().initialize();
+  }, []);
+
+  // Auto-sync when app comes to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        if (isOnline && offlineQueue.length > 0) {
+          syncStore.sync();
+        }
+      }
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
+  }, [isOnline, offlineQueue.length]);
+
   const loadData = useCallback(async (showLoader = true) => {
     if (showLoader) setIsLoading(true);
+    const store = getOfflineState();
     try {
-      const [configData, expensesData] = await Promise.all([
-        api.getConfig(),
-        api.getExpenses(),
-      ]);
-      setConfig(configData);
-      setAllExpenses(Array.isArray(expensesData) ? expensesData : []);
+      if (store.isOnline) {
+        const [configData, expensesData] = await Promise.all([
+          api.getConfig(),
+          api.getExpenses(),
+        ]);
+        setConfig(configData);
+        setAllExpenses(Array.isArray(expensesData) ? expensesData : []);
+        // Cache data for offline use (fire and forget to avoid re-render loop)
+        store.cacheConfig(configData);
+        store.cacheExpenses(Array.isArray(expensesData) ? expensesData : []);
+      } else {
+        // Use cached data when offline
+        setConfig(store.cachedConfig);
+        setAllExpenses(store.cachedExpenses);
+        toast.info('Using offline data');
+      }
     } catch {
-      toast.error('Failed to load data');
+      // Fall back to cached data on error
+      const fallbackStore = getOfflineState();
+      if (fallbackStore.cachedConfig) {
+        setConfig(fallbackStore.cachedConfig);
+        setAllExpenses(fallbackStore.cachedExpenses);
+        toast.error('Using cached data');
+      } else {
+        toast.error('Failed to load data');
+      }
     } finally {
       setIsLoading(false);
     }
   }, [toast]);
 
   useEffect(() => {
-    loadData();
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadData();
+    }
   }, [loadData]);
 
   const onRefresh = useCallback(async () => {
@@ -179,6 +230,7 @@ export default function DashboardScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.logo, { color: colors.primary }]}>ExpenseOwl</Text>
+          <SyncIndicator />
         </View>
 
         {/* Month Navigation */}
@@ -363,6 +415,9 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
   logo: {

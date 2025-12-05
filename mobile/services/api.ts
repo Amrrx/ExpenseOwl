@@ -233,6 +233,33 @@ class ApiService {
     const response = await this.client.post('/api/ai/test');
     return response.data;
   }
+
+  // Voice
+  async parseVoiceExpense(audioUri: string): Promise<{
+    transcript: string;
+    expenses: Array<{
+      name: string;
+      amount: number;
+      category: string;
+      date: string;
+      confidence: number;
+      ambiguous: boolean;
+    }>;
+  }> {
+    const formData = new FormData();
+    formData.append('audio', {
+      uri: audioUri,
+      type: 'audio/m4a',
+      name: 'recording.m4a',
+    } as unknown as Blob);
+
+    const response = await this.client.post('/api/ai/voice/parse', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  }
 }
 
 export const api = new ApiService();

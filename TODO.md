@@ -2,6 +2,7 @@
 
 ## In Progress
 - [ ] Final testing and bug fixes
+- [ ] Make mobile API URL configurable
 
 ## Priority 1 - Polish
 - [x] Add loading states/skeleton screens during data fetches
@@ -50,11 +51,15 @@
 - [x] Expense form with category selection
 - [x] Development build (expo-dev-client) for Android
 - [x] Disabled New Architecture to fix navigation crash
-- [ ] Voice expense entry UI
+- [x] Voice expense entry UI (VoiceRecorder component with expo-av)
+- [x] Sync status indicator (SyncIndicator component in header)
+- [x] Offline support with local storage (offlineStore with caching and queue)
+- [x] Microphone permission configured in app.json
+- [ ] Make API URL configurable (currently hardcoded to local IP)
 - [ ] AI config settings screen
-- [ ] Sync status indicator
-- [ ] Offline support with local storage
 - [ ] iOS build and testing
+- [ ] Production APK build
+- [ ] App Store / Play Store submission
 
 ## Completed
 - [x] React frontend with TypeScript and Vite
