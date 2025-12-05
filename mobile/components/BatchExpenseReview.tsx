@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
+  I18nManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,13 @@ import { hapticSuccess, hapticError, hapticLight, hapticWarning } from '../utils
 import { formatCurrency } from '../utils/currency';
 import { formatDateForInput } from '../utils/dates';
 import type { Config } from '../types';
+
+// RTL character ranges: Arabic, Hebrew, Persian, Urdu
+const RTL_REGEX = /[\u0591-\u07FF\u200F\u202B\u202E\uFB1D-\uFDFD\uFE70-\uFEFC]/;
+
+function isRTLText(text: string): boolean {
+  return RTL_REGEX.test(text);
+}
 
 interface ParsedExpense {
   name: string;
@@ -162,55 +170,64 @@ export function BatchExpenseReview({
         )}
 
         <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-          {expenses.map((exp, index) => (
-            <View
-              key={index.toString()}
-              style={[
-                styles.expenseCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-                exp.confidence !== undefined && exp.confidence < 0.7 ? { borderColor: colors.warning } : undefined,
-              ]}
-            >
-              <View style={styles.expenseHeader}>
-                <View style={styles.expenseMain}>
-                  {editingIndex === index ? (
-                    <TextInput
-                      style={[styles.nameInput, { color: colors.text, borderColor: colors.border }]}
-                      value={exp.name}
-                      onChangeText={(val) => handleUpdateExpense(index, 'name', val)}
-                      autoFocus
-                    />
-                  ) : (
-                    <Text style={[styles.expenseName, { color: colors.text }]}>{exp.name}</Text>
-                  )}
-                  <Text style={[styles.expenseCategory, { color: colors.textSecondary }]}>
-                    {exp.category}
-                  </Text>
-                </View>
-                <View style={styles.expenseRight}>
-                  {editingIndex === index ? (
-                    <TextInput
-                      style={[styles.amountInput, { color: colors.danger, borderColor: colors.border }]}
-                      value={Math.abs(exp.amount).toString()}
-                      onChangeText={(val) => {
-                        const num = parseFloat(val) || 0;
-                        handleUpdateExpense(index, 'amount', -Math.abs(num));
-                      }}
-                      keyboardType="decimal-pad"
-                    />
-                  ) : (
-                    <Text style={[styles.expenseAmount, { color: colors.danger }]}>
-                      {formatCurrency(Math.abs(exp.amount), currency)}
+          {expenses.map((exp, index) => {
+            const isRTL = isRTLText(exp.name);
+            return (
+              <View
+                key={index.toString()}
+                style={[
+                  styles.expenseCard,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  exp.confidence !== undefined && exp.confidence < 0.7 ? { borderColor: colors.warning } : undefined,
+                ]}
+              >
+                <View style={[styles.expenseHeader, isRTL && styles.expenseHeaderRTL]}>
+                  <View style={[styles.expenseMain, isRTL && styles.expenseMainRTL]}>
+                    {editingIndex === index ? (
+                      <TextInput
+                        style={[
+                          styles.nameInput,
+                          { color: colors.text, borderColor: colors.border },
+                          isRTL && styles.textRTL,
+                        ]}
+                        value={exp.name}
+                        onChangeText={(val) => handleUpdateExpense(index, 'name', val)}
+                        autoFocus
+                        textAlign={isRTL ? 'right' : 'left'}
+                      />
+                    ) : (
+                      <Text style={[styles.expenseName, { color: colors.text }, isRTL && styles.textRTL]}>
+                        {exp.name}
+                      </Text>
+                    )}
+                    <Text style={[styles.expenseCategory, { color: colors.textSecondary }, isRTL && styles.textRTL]}>
+                      {exp.category}
                     </Text>
-                  )}
-                  {exp.confidence && exp.confidence < 0.7 && (
-                    <View style={[styles.warningBadge, { backgroundColor: colors.warning + '20' }]}>
-                      <Ionicons name="warning" size={12} color={colors.warning} />
-                      <Text style={[styles.warningText, { color: colors.warning }]}>Uncertain</Text>
-                    </View>
-                  )}
+                  </View>
+                  <View style={[styles.expenseRight, isRTL && styles.expenseLeftRTL]}>
+                    {editingIndex === index ? (
+                      <TextInput
+                        style={[styles.amountInput, { color: colors.danger, borderColor: colors.border }]}
+                        value={Math.abs(exp.amount).toString()}
+                        onChangeText={(val) => {
+                          const num = parseFloat(val) || 0;
+                          handleUpdateExpense(index, 'amount', -Math.abs(num));
+                        }}
+                        keyboardType="decimal-pad"
+                      />
+                    ) : (
+                      <Text style={[styles.expenseAmount, { color: colors.danger }]}>
+                        {formatCurrency(Math.abs(exp.amount), currency)}
+                      </Text>
+                    )}
+                    {exp.confidence && exp.confidence < 0.7 && (
+                      <View style={[styles.warningBadge, { backgroundColor: colors.warning + '20' }]}>
+                        <Ionicons name="warning" size={12} color={colors.warning} />
+                        <Text style={[styles.warningText, { color: colors.warning }]}>Uncertain</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
 
               {/* Category Picker when editing */}
               {editingIndex === index && config?.categories && (
@@ -267,7 +284,8 @@ export function BatchExpenseReview({
                 </TouchableOpacity>
               </View>
             </View>
-          ))}
+            );
+          })}
 
           {expenses.length === 0 && (
             <View style={styles.emptyState}>
@@ -460,5 +478,19 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: fontSize.xl,
     fontWeight: '700',
+  },
+  // RTL styles for Arabic/Hebrew/Persian text
+  expenseHeaderRTL: {
+    flexDirection: 'row-reverse',
+  },
+  expenseMainRTL: {
+    alignItems: 'flex-end',
+  },
+  expenseLeftRTL: {
+    alignItems: 'flex-start',
+  },
+  textRTL: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
 });
