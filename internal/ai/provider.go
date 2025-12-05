@@ -25,10 +25,11 @@ type VoiceParseResponse struct {
 
 // VoiceParseRequest contains the context needed for parsing
 type VoiceParseRequest struct {
-	AudioData  []byte    `json:"audioData"`
-	Categories []string  `json:"categories"`
-	Currency   string    `json:"currency"`
-	Today      time.Time `json:"today"`
+	AudioData          []byte    `json:"audioData"`
+	Categories         []string  `json:"categories"`
+	Currency           string    `json:"currency"`
+	Today              time.Time `json:"today"`
+	TranslateToEnglish bool      `json:"translateToEnglish"` // Translate expense names to English
 }
 
 // AIProvider defines the interface for AI expense parsing providers

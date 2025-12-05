@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Alert,
   TextInput,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +20,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useToastStore } from '../../stores/toastStore';
 import { SUPPORTED_CURRENCIES } from '../../utils/currency';
 import { hapticSuccess, hapticWarning, hapticSelection, hapticLight } from '../../utils/haptics';
-import type { Config } from '../../types';
+import type { Config, UserPreferences } from '../../types';
 
 type ThemePreference = 'system' | 'light' | 'dark';
 
@@ -76,6 +77,7 @@ export default function SettingsScreen() {
   const toast = useToastStore();
 
   const [config, setConfig] = useState<Config | null>(null);
+  const [userPrefs, setUserPrefs] = useState<UserPreferences | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [newCategory, setNewCategory] = useState('');
@@ -85,8 +87,12 @@ export default function SettingsScreen() {
   const loadConfig = useCallback(async (showLoader = true) => {
     if (showLoader) setIsLoading(true);
     try {
-      const configData = await api.getConfig();
+      const [configData, prefsData] = await Promise.all([
+        api.getConfig(),
+        api.getUserPreferences().catch(() => null),
+      ]);
       setConfig(configData);
+      setUserPrefs(prefsData);
     } catch {
       toast.error('Failed to load settings');
     } finally {
@@ -198,6 +204,19 @@ export default function SettingsScreen() {
         },
       ]
     );
+  };
+
+  const handleTranslateToggle = async (value: boolean) => {
+    hapticSelection();
+    try {
+      const updated = { translateToEnglish: value };
+      await api.updateUserPreferences(updated);
+      setUserPrefs(updated);
+      hapticSuccess();
+      toast.success(value ? 'Voice input will translate to English' : 'Voice input will use spoken language');
+    } catch {
+      toast.error('Failed to update setting');
+    }
   };
 
   const currentCurrency = SUPPORTED_CURRENCIES.find(c => c.code === config?.currency);
@@ -330,6 +349,24 @@ export default function SettingsScreen() {
           )}
         </Card>
 
+        {/* Voice Input */}
+        <Card title="Voice Input">
+          <View style={[styles.settingRow, { backgroundColor: colors.surfaceSecondary }]}>
+            <View style={styles.settingLabelContainer}>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>Translate to English</Text>
+              <Text style={[styles.settingHint, { color: colors.textTertiary }]}>
+                Expense names will be translated to English
+              </Text>
+            </View>
+            <Switch
+              value={userPrefs?.translateToEnglish ?? false}
+              onValueChange={handleTranslateToggle}
+              trackColor={{ false: colors.surfaceSecondary, true: colors.primary + '60' }}
+              thumbColor={userPrefs?.translateToEnglish ? colors.primary : colors.textTertiary}
+            />
+          </View>
+        </Card>
+
         {/* Theme */}
         <ThemeSection />
 
@@ -436,6 +473,14 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: fontSize.base,
+  },
+  settingLabelContainer: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  settingHint: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
   },
   pickerList: {
     marginTop: spacing.sm,

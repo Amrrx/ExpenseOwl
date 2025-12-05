@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/tanq16/expenseowl/internal/storage"
-	"github.com/tanq16/expenseowl/internal/web"
 )
 
 // Handler holds the storage interface
@@ -359,38 +358,3 @@ func (h *Handler) DeleteRecurringExpense(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "success"})
 }
 
-// ------------------------------------------------------------
-// Static and UI Handlers
-// ------------------------------------------------------------
-
-func (h *Handler) ServeTableView(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
-		return
-	}
-	w.Header().Set("Content-Type", "text/html")
-	if err := web.ServeTemplate(w, "table.html"); err != nil {
-		http.Error(w, "Failed to serve template", http.StatusInternalServerError)
-	}
-}
-
-func (h *Handler) ServeSettingsPage(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
-		return
-	}
-	w.Header().Set("Content-Type", "text/html")
-	if err := web.ServeTemplate(w, "settings.html"); err != nil {
-		http.Error(w, "Failed to serve template", http.StatusInternalServerError)
-	}
-}
-
-func (h *Handler) ServeStaticFile(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
-		return
-	}
-	if err := web.ServeStatic(w, r.URL.Path); err != nil {
-		http.Error(w, "Failed to serve static file", http.StatusInternalServerError)
-	}
-}

@@ -145,6 +145,12 @@ func (g *GeminiProvider) buildPrompt(req VoiceParseRequest) string {
 	categoriesList := strings.Join(req.Categories, ", ")
 	todayStr := req.Today.Format("2006-01-02")
 
+	// Add translation instruction if enabled
+	nameInstruction := `- name: Brief description in the same language as spoken (e.g., "Coffee", "Lunch", "قهوة")`
+	if req.TranslateToEnglish {
+		nameInstruction = `- name: Brief description translated to English (e.g., if spoken in Arabic "قهوة", output "Coffee")`
+	}
+
 	return fmt.Sprintf(`You are an expense tracking assistant. Parse the audio input to extract ALL expenses mentioned.
 
 User's available categories: [%s]
@@ -152,7 +158,7 @@ User's currency: %s
 Today's date: %s
 
 For each expense found, extract:
-- name: Brief description (e.g., "Coffee", "Lunch", "Gas")
+%s
 - amount: MUST be NEGATIVE for expenses (e.g., -20.50), POSITIVE for income
 - category: MUST match one from the user's category list. If unsure, use "Miscellaneous"
 - tags: Optional array of relevant tags
@@ -188,7 +194,7 @@ IMPORTANT:
 - If you hear "fifty on coffee and groceries", that's TWO expenses
 - Category MUST be from the provided list or "Miscellaneous"
 - If amount is ambiguous (e.g., "about fifty"), set ambiguous: true and confidence < 0.7`,
-		categoriesList, req.Currency, todayStr)
+		categoriesList, req.Currency, todayStr, nameInstruction)
 }
 
 // MaskAPIKey returns a masked version of the API key for display

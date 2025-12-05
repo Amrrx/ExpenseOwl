@@ -13,7 +13,6 @@ import (
 	"github.com/tanq16/expenseowl/internal/auth"
 	"github.com/tanq16/expenseowl/internal/config"
 	"github.com/tanq16/expenseowl/internal/storage"
-	"github.com/tanq16/expenseowl/internal/web"
 )
 
 var version = "dev"
@@ -41,32 +40,11 @@ func runServer(port int) {
 		w.Write([]byte(version))
 	})
 
-	// UI Handlers
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html")
-		if err := web.ServeTemplate(w, "index.html"); err != nil {
-			log.Printf("HTTP ERROR: Failed to serve template: %v", err)
-			http.Error(w, "Failed to serve template", http.StatusInternalServerError)
-			return
-		}
+	// Health check
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok"}`))
 	})
-	http.HandleFunc("/table", handler.ServeTableView)
-	http.HandleFunc("/settings", handler.ServeSettingsPage)
-
-	// Static File Handlers
-	http.HandleFunc("/functions.js", handler.ServeStaticFile)
-	http.HandleFunc("/manifest.json", handler.ServeStaticFile)
-	http.HandleFunc("/sw.js", handler.ServeStaticFile)
-	http.HandleFunc("/pwa/", handler.ServeStaticFile)
-	http.HandleFunc("/style.css", handler.ServeStaticFile)
-	http.HandleFunc("/favicon.ico", handler.ServeStaticFile)
-	http.HandleFunc("/chart.min.js", handler.ServeStaticFile)
-	http.HandleFunc("/fa.min.css", handler.ServeStaticFile)
-	http.HandleFunc("/webfonts/", handler.ServeStaticFile)
 
 	// Config
 	http.HandleFunc("/config", handler.GetConfig)
@@ -167,58 +145,6 @@ func runAuthServer(port int) {
 	http.HandleFunc("/api/auth/google/verify", oauthHandler.GoogleVerify)
 	http.HandleFunc("/api/auth/apple/verify", oauthHandler.AppleVerify)
 
-	// UI Handlers (public for now, will add auth later)
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html")
-		if err := web.ServeTemplate(w, "index.html"); err != nil {
-			log.Printf("HTTP ERROR: Failed to serve template: %v", err)
-			http.Error(w, "Failed to serve template", http.StatusInternalServerError)
-			return
-		}
-	})
-	// Table and settings pages served directly (legacy)
-	http.HandleFunc("/table", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		web.ServeTemplate(w, "table.html")
-	})
-	http.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		web.ServeTemplate(w, "settings.html")
-	})
-
-	// Static File Handlers (public)
-	http.HandleFunc("/functions.js", func(w http.ResponseWriter, r *http.Request) {
-		web.ServeStatic(w, r.URL.Path)
-	})
-	http.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
-		web.ServeStatic(w, r.URL.Path)
-	})
-	http.HandleFunc("/sw.js", func(w http.ResponseWriter, r *http.Request) {
-		web.ServeStatic(w, r.URL.Path)
-	})
-	http.HandleFunc("/pwa/", func(w http.ResponseWriter, r *http.Request) {
-		web.ServeStatic(w, r.URL.Path)
-	})
-	http.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
-		web.ServeStatic(w, r.URL.Path)
-	})
-	http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		web.ServeStatic(w, r.URL.Path)
-	})
-	http.HandleFunc("/chart.min.js", func(w http.ResponseWriter, r *http.Request) {
-		web.ServeStatic(w, r.URL.Path)
-	})
-	http.HandleFunc("/fa.min.css", func(w http.ResponseWriter, r *http.Request) {
-		web.ServeStatic(w, r.URL.Path)
-	})
-	http.HandleFunc("/webfonts/", func(w http.ResponseWriter, r *http.Request) {
-		web.ServeStatic(w, r.URL.Path)
-	})
-
 	// Protected API routes (require authentication)
 	// Config
 	http.Handle("/api/config", authMiddleware(http.HandlerFunc(pgHandler.GetConfig)))
@@ -252,11 +178,15 @@ func runAuthServer(port int) {
 	// http.Handle("/api/import/csv", authMiddleware(http.HandlerFunc(pgHandler.ImportCSV)))
 	// http.Handle("/api/import/csvold", authMiddleware(http.HandlerFunc(pgHandler.ImportOldCSV)))
 
-	// Voice & AI
+	// Voice & AI (internal - not for mobile clients)
 	http.Handle("/api/ai/voice/parse", authMiddleware(http.HandlerFunc(pgHandler.ParseVoiceExpense)))
 	http.Handle("/api/ai/config", authMiddleware(http.HandlerFunc(pgHandler.GetAIConfig)))
 	http.Handle("/api/ai/config/update", authMiddleware(http.HandlerFunc(pgHandler.UpdateAIConfig)))
 	http.Handle("/api/ai/test", authMiddleware(http.HandlerFunc(pgHandler.TestAIConnection)))
+
+	// User Preferences (user-facing settings only)
+	http.Handle("/api/user/preferences", authMiddleware(http.HandlerFunc(pgHandler.GetUserPreferences)))
+	http.Handle("/api/user/preferences/update", authMiddleware(http.HandlerFunc(pgHandler.UpdateUserPreferences)))
 
 	// Legacy routes removed in multi-user mode
 	// Use /api/* endpoints with authentication instead

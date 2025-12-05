@@ -631,10 +631,11 @@ func (h *PostgresHandler) ParseVoiceExpense(w http.ResponseWriter, r *http.Reque
 
 	// Parse voice expense
 	parseReq := ai.VoiceParseRequest{
-		AudioData:  audioBytes,
-		Categories: categories,
-		Currency:   currency,
-		Today:      time.Now(),
+		AudioData:          audioBytes,
+		Categories:         categories,
+		Currency:           currency,
+		Today:              time.Now(),
+		TranslateToEnglish: aiConfig.TranslateToEnglish,
 	}
 
 	response, err := provider.ParseVoiceExpense(parseReq)
@@ -718,4 +719,70 @@ func maskAPIKey(key string) string {
 		return "****"
 	}
 	return key[:4] + "..." + key[len(key)-4:]
+}
+
+// GetUserPreferences returns user preferences (no AI config exposed)
+func (h *PostgresHandler) GetUserPreferences(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
+		return
+	}
+
+	store, err := h.getUserStorage(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
+		return
+	}
+
+	aiConfig, err := store.GetAIConfig()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get preferences"})
+		log.Printf("API ERROR: Failed to get AI config for preferences: %v\n", err)
+		return
+	}
+
+	prefs := UserPreferences{
+		TranslateToEnglish: aiConfig.TranslateToEnglish,
+	}
+
+	writeJSON(w, http.StatusOK, prefs)
+}
+
+// UpdateUserPreferences updates user preferences
+func (h *PostgresHandler) UpdateUserPreferences(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
+		return
+	}
+
+	store, err := h.getUserStorage(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
+		return
+	}
+
+	var prefs UserPreferences
+	if err := json.NewDecoder(r.Body).Decode(&prefs); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	// Get current AI config and update only user preferences
+	aiConfig, err := store.GetAIConfig()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get current config"})
+		log.Printf("API ERROR: Failed to get AI config: %v\n", err)
+		return
+	}
+
+	aiConfig.TranslateToEnglish = prefs.TranslateToEnglish
+
+	if err := store.UpdateAIConfig(*aiConfig); err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to save preferences"})
+		log.Printf("API ERROR: Failed to save preferences: %v\n", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "success"})
+	log.Println("HTTP: User preferences updated successfully")
 }

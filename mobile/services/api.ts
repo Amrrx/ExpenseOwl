@@ -11,7 +11,7 @@ import type {
   SyncPullResponse,
   SyncPushRequest,
   SyncPushResponse,
-  AIConfig,
+  UserPreferences,
 } from '../types';
 
 // API URL from app.config.js extra config
@@ -221,19 +221,14 @@ class ApiService {
     return response.data;
   }
 
-  // AI
-  async getAIConfig(): Promise<AIConfig> {
-    const response = await this.client.get('/api/ai/config');
+  // User Preferences
+  async getUserPreferences(): Promise<UserPreferences> {
+    const response = await this.client.get('/api/user/preferences');
     return response.data;
   }
 
-  async updateAIConfig(config: AIConfig): Promise<void> {
-    await this.client.put('/api/ai/config', config);
-  }
-
-  async testAIConnection(): Promise<{ status: string; message: string }> {
-    const response = await this.client.post('/api/ai/test');
-    return response.data;
+  async updateUserPreferences(prefs: UserPreferences): Promise<void> {
+    await this.client.put('/api/user/preferences/update', prefs);
   }
 
   // Voice

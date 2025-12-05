@@ -60,10 +60,11 @@ type Config struct {
 
 // AIConfig stores AI provider configuration
 type AIConfig struct {
-	Enabled  bool   `json:"enabled"`
-	Provider string `json:"provider"` // gemini, anthropic, openai
-	APIKey   string `json:"apiKey"`   // Stored encrypted or use external secrets
-	Model    string `json:"model"`    // Optional: provider-specific model
+	Enabled            bool   `json:"enabled"`
+	Provider           string `json:"provider"`           // gemini, anthropic, openai
+	APIKey             string `json:"apiKey"`             // Stored encrypted or use external secrets
+	Model              string `json:"model"`              // Optional: provider-specific model
+	TranslateToEnglish bool   `json:"translateToEnglish"` // Translate expense names to English
 }
 
 type RecurringExpense struct {

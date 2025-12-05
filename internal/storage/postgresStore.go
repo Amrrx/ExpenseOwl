@@ -185,27 +185,42 @@ func (s *PostgresStore) UpdateStartDate(startDate int) error {
 	return err
 }
 
-// GetAIConfig retrieves AI configuration from environment variables (server-wide config)
+// GetAIConfig retrieves AI configuration (server-wide from env + per-user preferences from DB)
 func (s *PostgresStore) GetAIConfig() (*AIConfig, error) {
 	// AI config is controlled by backend admin via environment variables
-	// This makes it server-wide rather than per-user
 	enabled := os.Getenv("AI_ENABLED") == "true"
 	provider := os.Getenv("AI_PROVIDER") // gemini, openai, anthropic
 	apiKey := os.Getenv("AI_API_KEY")
 	model := os.Getenv("AI_MODEL")
 
+	// Get user-specific preference from database
+	var translateToEnglish bool
+	err := s.db.QueryRow(`
+		SELECT COALESCE(translate_to_english, false) FROM user_configs WHERE user_id = $1
+	`, s.userID).Scan(&translateToEnglish)
+
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to get translate preference: %w", err)
+	}
+
 	return &AIConfig{
-		Enabled:  enabled && apiKey != "",
-		Provider: provider,
-		APIKey:   apiKey,
-		Model:    model,
+		Enabled:            enabled && apiKey != "",
+		Provider:           provider,
+		APIKey:             apiKey,
+		Model:              model,
+		TranslateToEnglish: translateToEnglish,
 	}, nil
 }
 
-// UpdateAIConfig updates AI configuration (no-op for env-based config)
+// UpdateAIConfig updates user-specific AI preferences (translate setting only)
 func (s *PostgresStore) UpdateAIConfig(aiConfig AIConfig) error {
-	// AI config is controlled via environment variables, not user-modifiable
-	return nil
+	_, err := s.db.Exec(`
+		INSERT INTO user_configs (user_id, categories, currency, start_date, translate_to_english, updated_at)
+		VALUES ($1, ARRAY['Food', 'Groceries', 'Travel', 'Rent', 'Utilities', 'Entertainment', 'Healthcare', 'Shopping', 'Miscellaneous', 'Income'], 'usd', 1, $2, $3)
+		ON CONFLICT (user_id) DO UPDATE SET translate_to_english = $2, updated_at = $3
+	`, s.userID, aiConfig.TranslateToEnglish, time.Now())
+
+	return err
 }
 
 // GetAllExpenses retrieves all expenses for the user
