@@ -7,3 +7,4 @@ export { ExpenseForm } from './ExpenseForm';
 export { Loading } from './Loading';
 export { SyncIndicator } from './SyncIndicator';
 export { VoiceRecorder } from './VoiceRecorder';
+export { BatchExpenseReview } from './BatchExpenseReview';

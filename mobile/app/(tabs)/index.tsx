@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { PieChart, BarChart } from 'react-native-gifted-charts';
 import { useTheme, spacing, fontSize, chartColors } from '../../theme';
-import { Card, FAB, ExpenseForm, SyncIndicator, VoiceRecorder } from '../../components';
+import { Card, FAB, ExpenseForm, SyncIndicator, VoiceRecorder, BatchExpenseReview } from '../../components';
 import { api } from '../../services/api';
 import { useToastStore } from '../../stores/toastStore';
 import { useSyncStore } from '../../stores/syncStore';
@@ -44,6 +44,9 @@ export default function DashboardScreen() {
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [isParsingVoice, setIsParsingVoice] = useState(false);
   const [parsedExpenseData, setParsedExpenseData] = useState<Partial<Expense> | null>(null);
+  const [showBatchReview, setShowBatchReview] = useState(false);
+  const [batchExpenses, setBatchExpenses] = useState<Array<{ name: string; amount: number; category: string; date: string; confidence?: number }>>([]);
+  const [batchTranscript, setBatchTranscript] = useState<string | undefined>();
 
   useEffect(() => {
     syncStore.initialize();
@@ -138,15 +141,26 @@ export default function DashboardScreen() {
     try {
       const result = await api.parseVoiceExpense(uri);
       if (result.expenses && result.expenses.length > 0) {
-        const parsed = result.expenses[0];
-        setParsedExpenseData({
+        const parsedExpenses = result.expenses.map(parsed => ({
           name: parsed.name,
           amount: parsed.amount,
-          category: parsed.category && config?.categories.includes(parsed.category) ? parsed.category : config?.categories[0],
+          category: parsed.category && config?.categories.includes(parsed.category)
+            ? parsed.category
+            : config?.categories[0] || 'Miscellaneous',
           date: parsed.date || new Date().toISOString(),
-        });
+          confidence: parsed.confidence,
+        }));
+
+        setBatchExpenses(parsedExpenses);
+        setBatchTranscript(result.transcript);
         hapticSuccess();
-        setShowExpenseForm(true);
+
+        if (parsedExpenses.length === 1) {
+          setParsedExpenseData(parsedExpenses[0]);
+          setShowExpenseForm(true);
+        } else {
+          setShowBatchReview(true);
+        }
       } else {
         hapticError();
         toast.error('Could not parse expense. Try manual entry.');
@@ -476,6 +490,19 @@ export default function DashboardScreen() {
         onSave={handleExpenseSaved}
         config={config}
         initialData={parsedExpenseData}
+      />
+
+      <BatchExpenseReview
+        visible={showBatchReview}
+        onClose={() => {
+          setShowBatchReview(false);
+          setBatchExpenses([]);
+          setBatchTranscript(undefined);
+        }}
+        onSave={handleExpenseSaved}
+        expenses={batchExpenses}
+        transcript={batchTranscript}
+        config={config}
       />
     </SafeAreaView>
   );

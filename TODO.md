@@ -28,7 +28,7 @@
 - [x] Haptic feedback on mobile actions
 
 ## Priority 4 - Agentic Features
-- [ ] Batch voice parsing (multiple expenses from one recording)
+- [x] Batch voice parsing (multiple expenses from one recording)
 - [ ] Receipt photo scanning (camera → AI extracts merchant, amount, date, category)
 - [ ] Natural language queries ("How much did I spend on food this month?")
 - [ ] Quick expense templates (tap to log frequent expenses)
