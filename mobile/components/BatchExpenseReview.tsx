@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -50,6 +50,12 @@ export function BatchExpenseReview({
   const [expenses, setExpenses] = useState<ParsedExpense[]>(initialExpenses);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sync state when props change (component is reused)
+  useEffect(() => {
+    setExpenses(initialExpenses);
+    setEditingIndex(null);
+  }, [initialExpenses]);
 
   const currency = config?.currency || 'usd';
 
