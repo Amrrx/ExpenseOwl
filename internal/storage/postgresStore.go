@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -184,22 +185,26 @@ func (s *PostgresStore) UpdateStartDate(startDate int) error {
 	return err
 }
 
-// GetAIConfig retrieves AI configuration (stored in user_configs for now)
+// GetAIConfig retrieves AI configuration from environment variables (server-wide config)
 func (s *PostgresStore) GetAIConfig() (*AIConfig, error) {
-	// For now, AI config is not in the database schema
-	// Return empty config
+	// AI config is controlled by backend admin via environment variables
+	// This makes it server-wide rather than per-user
+	enabled := os.Getenv("AI_ENABLED") == "true"
+	provider := os.Getenv("AI_PROVIDER") // gemini, openai, anthropic
+	apiKey := os.Getenv("AI_API_KEY")
+	model := os.Getenv("AI_MODEL")
+
 	return &AIConfig{
-		Enabled:  false,
-		Provider: "",
-		APIKey:   "",
-		Model:    "",
+		Enabled:  enabled && apiKey != "",
+		Provider: provider,
+		APIKey:   apiKey,
+		Model:    model,
 	}, nil
 }
 
-// UpdateAIConfig updates AI configuration
+// UpdateAIConfig updates AI configuration (no-op for env-based config)
 func (s *PostgresStore) UpdateAIConfig(aiConfig AIConfig) error {
-	// AI config not yet in database schema
-	// This would require schema migration
+	// AI config is controlled via environment variables, not user-modifiable
 	return nil
 }
 

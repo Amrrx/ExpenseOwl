@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
 import type {
   AuthResponse,
   RegisterRequest,
@@ -13,8 +14,9 @@ import type {
   AIConfig,
 } from '../types';
 
-// TODO: Configure this based on environment
-const API_BASE_URL = __DEV__ ? 'http://192.168.1.19:8080' : 'https://your-production-url.com';
+// API URL from app.config.js extra config
+// Set via: EXPO_PUBLIC_API_URL=https://your-api.com npx expo run:android
+const API_BASE_URL = Constants.expoConfig?.extra?.apiUrl || 'http://192.168.1.19:8080';
 
 const TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';

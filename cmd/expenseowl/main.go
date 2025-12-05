@@ -252,11 +252,11 @@ func runAuthServer(port int) {
 	// http.Handle("/api/import/csv", authMiddleware(http.HandlerFunc(pgHandler.ImportCSV)))
 	// http.Handle("/api/import/csvold", authMiddleware(http.HandlerFunc(pgHandler.ImportOldCSV)))
 
-	// TODO: Voice & AI not yet implemented for PostgreSQL
-	// http.Handle("/api/voice/parse", authMiddleware(http.HandlerFunc(pgHandler.ParseVoiceExpense)))
-	// http.Handle("/api/settings/ai", authMiddleware(http.HandlerFunc(pgHandler.GetAIConfig)))
-	// http.Handle("/api/settings/ai/update", authMiddleware(http.HandlerFunc(pgHandler.UpdateAIConfig)))
-	// http.Handle("/api/settings/ai/test", authMiddleware(http.HandlerFunc(pgHandler.TestAIConnection)))
+	// Voice & AI
+	http.Handle("/api/ai/voice/parse", authMiddleware(http.HandlerFunc(pgHandler.ParseVoiceExpense)))
+	http.Handle("/api/ai/config", authMiddleware(http.HandlerFunc(pgHandler.GetAIConfig)))
+	http.Handle("/api/ai/config/update", authMiddleware(http.HandlerFunc(pgHandler.UpdateAIConfig)))
+	http.Handle("/api/ai/test", authMiddleware(http.HandlerFunc(pgHandler.TestAIConnection)))
 
 	// Legacy routes removed in multi-user mode
 	// Use /api/* endpoints with authentication instead

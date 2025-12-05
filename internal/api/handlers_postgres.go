@@ -2,9 +2,15 @@ package api
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"time"
 
+	"github.com/tanq16/expenseowl/internal/ai"
 	"github.com/tanq16/expenseowl/internal/storage"
 )
 
@@ -456,5 +462,260 @@ func (h *PostgresHandler) DeleteRecurringExpense(w http.ResponseWriter, r *http.
 	w.WriteHeader(http.StatusOK)
 }
 
-// Note: CSV Import/Export, Voice Parsing, and AI features not yet implemented for PostgreSQL
-// These would require additional implementation
+// GetAIConfig returns AI configuration for the user
+func (h *PostgresHandler) GetAIConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store, err := h.getUserStorage(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	aiConfig, err := store.GetAIConfig()
+	if err != nil {
+		http.Error(w, "Failed to get AI config", http.StatusInternalServerError)
+		return
+	}
+
+	// Mask the API key for security
+	maskedConfig := struct {
+		Enabled   bool   `json:"enabled"`
+		Provider  string `json:"provider"`
+		APIKey    string `json:"apiKey"`
+		Model     string `json:"model"`
+		HasAPIKey bool   `json:"hasApiKey"`
+	}{
+		Enabled:   aiConfig.Enabled,
+		Provider:  aiConfig.Provider,
+		APIKey:    maskAPIKey(aiConfig.APIKey),
+		Model:     aiConfig.Model,
+		HasAPIKey: aiConfig.APIKey != "",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(maskedConfig)
+}
+
+// UpdateAIConfig updates AI configuration for the user
+func (h *PostgresHandler) UpdateAIConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store, err := h.getUserStorage(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var newConfig storage.AIConfig
+	if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := store.UpdateAIConfig(newConfig); err != nil {
+		http.Error(w, "Failed to save AI config", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// TestAIConnection tests the AI provider connection
+func (h *PostgresHandler) TestAIConnection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store, err := h.getUserStorage(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	aiConfig, err := store.GetAIConfig()
+	if err != nil {
+		http.Error(w, "Failed to get AI config", http.StatusInternalServerError)
+		return
+	}
+
+	if aiConfig.APIKey == "" {
+		http.Error(w, "API key not configured", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Connection successful"})
+}
+
+// ParseVoiceExpense handles voice input parsing with multipart/form-data
+func (h *PostgresHandler) ParseVoiceExpense(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store, err := h.getUserStorage(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Check if AI is enabled
+	aiConfig, err := store.GetAIConfig()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get AI config"})
+		log.Printf("API ERROR: Failed to get AI config: %v\n", err)
+		return
+	}
+
+	if !aiConfig.Enabled {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "AI features are not enabled. Please configure AI settings first."})
+		return
+	}
+
+	if aiConfig.APIKey == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "AI API key not configured"})
+		return
+	}
+
+	// Parse multipart form (max 10MB)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Failed to parse form data"})
+		return
+	}
+
+	file, _, err := r.FormFile("audio")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Audio file is required"})
+		return
+	}
+	defer file.Close()
+
+	audioBytes, err := io.ReadAll(file)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to read audio file"})
+		return
+	}
+
+	// Get user's categories and currency
+	categories, err := store.GetCategories()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get categories"})
+		log.Printf("API ERROR: Failed to get categories: %v\n", err)
+		return
+	}
+
+	currency, err := store.GetCurrency()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get currency"})
+		log.Printf("API ERROR: Failed to get currency: %v\n", err)
+		return
+	}
+
+	// Create AI provider
+	provider, err := ai.NewProvider(ai.ProviderType(aiConfig.Provider), aiConfig.APIKey, aiConfig.Model)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to create AI provider: %v", err)})
+		log.Printf("API ERROR: Failed to create AI provider: %v\n", err)
+		return
+	}
+
+	// Parse voice expense
+	parseReq := ai.VoiceParseRequest{
+		AudioData:  audioBytes,
+		Categories: categories,
+		Currency:   currency,
+		Today:      time.Now(),
+	}
+
+	response, err := provider.ParseVoiceExpense(parseReq)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to parse voice: %v", err)})
+		log.Printf("API ERROR: Failed to parse voice: %v\n", err)
+		return
+	}
+
+	// Return parsed expenses for review
+	writeJSON(w, http.StatusOK, response)
+	log.Printf("HTTP: Successfully parsed %d expenses from voice input\n", len(response.Expenses))
+}
+
+// ParseVoiceExpenseBase64 handles voice input parsing with JSON base64 encoded audio
+func (h *PostgresHandler) ParseVoiceExpenseBase64(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store, err := h.getUserStorage(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Check if AI is enabled
+	aiConfig, err := store.GetAIConfig()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get AI config"})
+		return
+	}
+
+	if !aiConfig.Enabled || aiConfig.APIKey == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "AI features are not enabled"})
+		return
+	}
+
+	// Parse JSON request with base64 audio
+	var req struct {
+		AudioData string `json:"audioData"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	audioBytes, err := base64.StdEncoding.DecodeString(req.AudioData)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid base64 audio data"})
+		return
+	}
+
+	categories, _ := store.GetCategories()
+	currency, _ := store.GetCurrency()
+
+	provider, err := ai.NewProvider(ai.ProviderType(aiConfig.Provider), aiConfig.APIKey, aiConfig.Model)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to create AI provider"})
+		return
+	}
+
+	response, err := provider.ParseVoiceExpense(ai.VoiceParseRequest{
+		AudioData:  audioBytes,
+		Categories: categories,
+		Currency:   currency,
+		Today:      time.Now(),
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to parse voice: %v", err)})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// maskAPIKey masks an API key for display
+func maskAPIKey(key string) string {
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:4] + "..." + key[len(key)-4:]
+}
