@@ -9,13 +9,11 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, spacing, fontSize, borderRadius } from '../theme';
 import { Button } from './Button';
-import { VoiceRecorder } from './VoiceRecorder';
 import { api } from '../services/api';
 import { useToastStore } from '../stores/toastStore';
 import { hapticSuccess, hapticError, hapticLight, hapticSelection } from '../utils/haptics';
@@ -28,9 +26,10 @@ interface ExpenseFormProps {
   onSave: () => void;
   expense?: Expense | null;
   config: Config | null;
+  initialData?: Partial<Expense> | null;
 }
 
-export function ExpenseForm({ visible, onClose, onSave, expense, config }: ExpenseFormProps) {
+export function ExpenseForm({ visible, onClose, onSave, expense, config, initialData }: ExpenseFormProps) {
   const { colors } = useTheme();
   const toast = useToastStore();
 
@@ -42,8 +41,6 @@ export function ExpenseForm({ visible, onClose, onSave, expense, config }: Expen
   const [tags, setTags] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
-  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
-  const [isParsingVoice, setIsParsingVoice] = useState(false);
 
   useEffect(() => {
     if (expense) {
@@ -53,10 +50,17 @@ export function ExpenseForm({ visible, onClose, onSave, expense, config }: Expen
       setCategory(expense.category);
       setDate(formatDateForInput(new Date(expense.date)));
       setTags(expense.tags?.join(', ') || '');
+    } else if (initialData) {
+      setName(initialData.name || '');
+      setAmount(initialData.amount ? Math.abs(initialData.amount).toString() : '');
+      setIsExpense(initialData.amount ? initialData.amount < 0 : true);
+      setCategory(initialData.category || config?.categories[0] || '');
+      setDate(initialData.date ? formatDateForInput(new Date(initialData.date)) : formatDateForInput(new Date()));
+      setTags('');
     } else {
       resetForm();
     }
-  }, [expense, visible]);
+  }, [expense, initialData, visible]);
 
   const resetForm = () => {
     setName('');
@@ -135,35 +139,6 @@ export function ExpenseForm({ visible, onClose, onSave, expense, config }: Expen
     setIsExpense(!isExpense);
   };
 
-  const handleVoiceRecording = async (uri: string) => {
-    setIsParsingVoice(true);
-    try {
-      const result = await api.parseVoiceExpense(uri);
-      if (result.expenses && result.expenses.length > 0) {
-        const parsed = result.expenses[0];
-        setName(parsed.name);
-        setAmount(Math.abs(parsed.amount).toString());
-        setIsExpense(parsed.amount < 0);
-        if (parsed.category && config?.categories.includes(parsed.category)) {
-          setCategory(parsed.category);
-        }
-        if (parsed.date) {
-          setDate(formatDateForInput(new Date(parsed.date)));
-        }
-        hapticSuccess();
-        toast.success('Voice parsed successfully');
-      } else {
-        hapticError();
-        toast.error('Could not parse expense from voice');
-      }
-    } catch {
-      hapticError();
-      toast.error('Failed to process voice input');
-    } finally {
-      setIsParsingVoice(false);
-    }
-  };
-
   return (
     <Modal
       visible={visible}
@@ -182,25 +157,9 @@ export function ExpenseForm({ visible, onClose, onSave, expense, config }: Expen
               <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={[styles.title, { color: colors.text }]}>
-              {expense ? 'Edit Expense' : 'Add Expense'}
+              {expense ? 'Edit Expense' : initialData ? 'Confirm Expense' : 'Add Expense'}
             </Text>
-            {!expense && (
-              <TouchableOpacity
-                onPress={() => {
-                  hapticLight();
-                  setShowVoiceRecorder(true);
-                }}
-                style={styles.closeButton}
-                disabled={isParsingVoice}
-              >
-                {isParsingVoice ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <Ionicons name="mic" size={24} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            )}
-            {expense && <View style={styles.closeButton} />}
+            <View style={styles.closeButton} />
           </View>
 
           <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
@@ -337,12 +296,6 @@ export function ExpenseForm({ visible, onClose, onSave, expense, config }: Expen
             </Button>
           </View>
         </KeyboardAvoidingView>
-
-        <VoiceRecorder
-          visible={showVoiceRecorder}
-          onClose={() => setShowVoiceRecorder(false)}
-          onRecordingComplete={handleVoiceRecording}
-        />
       </SafeAreaView>
     </Modal>
   );

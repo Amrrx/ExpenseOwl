@@ -1,17 +1,17 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, AppState } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, AppState, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { PieChart, BarChart } from 'react-native-gifted-charts';
 import { useTheme, spacing, fontSize, chartColors } from '../../theme';
-import { Card, FAB, ExpenseForm, SyncIndicator } from '../../components';
+import { Card, FAB, ExpenseForm, SyncIndicator, VoiceRecorder } from '../../components';
 import { api } from '../../services/api';
 import { useToastStore } from '../../stores/toastStore';
 import { useSyncStore } from '../../stores/syncStore';
 import { useOfflineStore } from '../../stores/offlineStore';
 import { formatCurrency, COLOR_PALETTE } from '../../utils/currency';
-import { formatMonth, getMonthBounds } from '../../utils/dates';
-import { hapticSelection } from '../../utils/haptics';
+import { formatMonth, getMonthBounds, formatDateForInput } from '../../utils/dates';
+import { hapticSelection, hapticSuccess, hapticError, hapticLight } from '../../utils/haptics';
 import type { Expense, Config } from '../../types';
 
 // Get store state without triggering re-renders
@@ -41,6 +41,9 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [chartView, setChartView] = useState(0);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [isParsingVoice, setIsParsingVoice] = useState(false);
+  const [parsedExpenseData, setParsedExpenseData] = useState<Partial<Expense> | null>(null);
 
   useEffect(() => {
     syncStore.initialize();
@@ -126,6 +129,47 @@ export default function DashboardScreen() {
 
   const handleExpenseSaved = () => {
     loadData(false);
+    setParsedExpenseData(null);
+  };
+
+  const handleVoiceRecording = async (uri: string) => {
+    setShowVoiceRecorder(false);
+    setIsParsingVoice(true);
+    try {
+      const result = await api.parseVoiceExpense(uri);
+      if (result.expenses && result.expenses.length > 0) {
+        const parsed = result.expenses[0];
+        setParsedExpenseData({
+          name: parsed.name,
+          amount: parsed.amount,
+          category: parsed.category && config?.categories.includes(parsed.category) ? parsed.category : config?.categories[0],
+          date: parsed.date || new Date().toISOString(),
+        });
+        hapticSuccess();
+        setShowExpenseForm(true);
+      } else {
+        hapticError();
+        toast.error('Could not parse expense. Try manual entry.');
+        setShowExpenseForm(true);
+      }
+    } catch {
+      hapticError();
+      toast.error('Voice processing failed. Try manual entry.');
+      setShowExpenseForm(true);
+    } finally {
+      setIsParsingVoice(false);
+    }
+  };
+
+  const handleFabPress = () => {
+    hapticLight();
+    setShowVoiceRecorder(true);
+  };
+
+  const handleManualEntry = () => {
+    hapticLight();
+    setParsedExpenseData(null);
+    setShowExpenseForm(true);
   };
 
   const startDate = config?.startDate || 1;
@@ -230,7 +274,12 @@ export default function DashboardScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.logo, { color: colors.primary }]}>ExpenseOwl</Text>
-          <SyncIndicator />
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={handleManualEntry} style={styles.headerButton}>
+              <Ionicons name="add-circle-outline" size={26} color={colors.text} />
+            </TouchableOpacity>
+            <SyncIndicator />
+          </View>
         </View>
 
         {/* Month Navigation */}
@@ -395,13 +444,38 @@ export default function DashboardScreen() {
         )}
       </ScrollView>
 
-      <FAB onPress={() => setShowExpenseForm(true)} />
+      {/* Processing Overlay */}
+      {isParsingVoice && (
+        <View style={styles.processingOverlay}>
+          <View style={[styles.processingCard, { backgroundColor: colors.surface }]}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.processingText, { color: colors.text }]}>
+              Processing your voice...
+            </Text>
+            <Text style={[styles.processingSubtext, { color: colors.textSecondary }]}>
+              This may take a moment
+            </Text>
+          </View>
+        </View>
+      )}
+
+      <FAB icon="mic" onPress={handleFabPress} />
+
+      <VoiceRecorder
+        visible={showVoiceRecorder}
+        onClose={() => setShowVoiceRecorder(false)}
+        onRecordingComplete={handleVoiceRecording}
+      />
 
       <ExpenseForm
         visible={showExpenseForm}
-        onClose={() => setShowExpenseForm(false)}
+        onClose={() => {
+          setShowExpenseForm(false);
+          setParsedExpenseData(null);
+        }}
         onSave={handleExpenseSaved}
         config={config}
+        initialData={parsedExpenseData}
       />
     </SafeAreaView>
   );
@@ -419,6 +493,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.md,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  headerButton: {
+    padding: spacing.xs,
   },
   logo: {
     fontSize: fontSize.xl,
@@ -557,5 +639,27 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     marginTop: spacing.md,
     textAlign: 'center',
+  },
+  processingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  processingCard: {
+    padding: spacing.xl,
+    borderRadius: 16,
+    alignItems: 'center',
+    minWidth: 200,
+  },
+  processingText: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    marginTop: spacing.md,
+  },
+  processingSubtext: {
+    fontSize: fontSize.sm,
+    marginTop: spacing.xs,
   },
 });
