@@ -2,7 +2,7 @@
 
 ## In Progress
 - [ ] Final testing and bug fixes
-- [ ] Make mobile API URL configurable
+- [x] Make mobile API URL configurable (app.config.js)
 
 ## Priority 1 - Polish
 - [x] Add loading states/skeleton screens during data fetches
@@ -27,7 +27,16 @@
 - [x] Pull-to-refresh on mobile
 - [x] Haptic feedback on mobile actions
 
-## Priority 4 - Data & Analytics
+## Priority 4 - Agentic Features
+- [ ] Batch voice parsing (multiple expenses from one recording)
+- [ ] Receipt photo scanning (camera → AI extracts merchant, amount, date, category)
+- [ ] Natural language queries ("How much did I spend on food this month?")
+- [ ] Quick expense templates (tap to log frequent expenses)
+- [ ] Smart suggestions ("Add as recurring?" for weekly patterns)
+- [ ] AI spending insights (weekly summary with trends)
+- [ ] Anomaly alerts ("Unusual expense detected")
+
+## Priority 5 - Data & Analytics
 - [x] Donut chart with center total (replaced pie chart)
 - [x] 6-month spending trend bar chart
 - [x] Spending trend indicator (% change vs previous month)
@@ -55,8 +64,9 @@
 - [x] Sync status indicator (SyncIndicator component in header)
 - [x] Offline support with local storage (offlineStore with caching and queue)
 - [x] Microphone permission configured in app.json
-- [ ] Make API URL configurable (currently hardcoded to local IP)
-- [ ] AI config settings screen
+- [x] Make API URL configurable (app.config.js with EXPO_PUBLIC_API_URL)
+- [x] Voice input UX (FAB opens voice, processing overlay, error handling)
+- [x] AI config (server-controlled via env vars, no UI needed)
 - [ ] iOS build and testing
 - [ ] Production APK build
 - [ ] App Store / Play Store submission

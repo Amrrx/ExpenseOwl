@@ -21,6 +21,55 @@ import { SUPPORTED_CURRENCIES } from '../../utils/currency';
 import { hapticSuccess, hapticWarning, hapticSelection, hapticLight } from '../../utils/haptics';
 import type { Config } from '../../types';
 
+type ThemePreference = 'system' | 'light' | 'dark';
+
+const THEME_OPTIONS: { value: ThemePreference; label: string; icon: 'phone-portrait-outline' | 'sunny-outline' | 'moon-outline' }[] = [
+  { value: 'system', label: 'System', icon: 'phone-portrait-outline' },
+  { value: 'light', label: 'Light', icon: 'sunny-outline' },
+  { value: 'dark', label: 'Dark', icon: 'moon-outline' },
+];
+
+function ThemeSection() {
+  const { colors, themePreference, setThemePreference } = useTheme();
+
+  const handleThemeChange = (value: ThemePreference) => {
+    hapticSelection();
+    setThemePreference(value);
+  };
+
+  return (
+    <Card title="Appearance">
+      <View style={styles.themeOptions}>
+        {THEME_OPTIONS.map(({ value, label, icon }) => (
+          <TouchableOpacity
+            key={value}
+            style={[
+              styles.themeOption,
+              { backgroundColor: colors.surfaceSecondary },
+              themePreference === value && { backgroundColor: colors.primary + '20', borderColor: colors.primary, borderWidth: 1 },
+            ]}
+            onPress={() => handleThemeChange(value)}
+          >
+            <Ionicons
+              name={icon}
+              size={20}
+              color={themePreference === value ? colors.primary : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.themeOptionText,
+                { color: themePreference === value ? colors.primary : colors.text },
+              ]}
+            >
+              {label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
 export default function SettingsScreen() {
   const { colors } = useTheme();
   const { user, logout } = useAuthStore();
@@ -281,6 +330,9 @@ export default function SettingsScreen() {
           )}
         </Card>
 
+        {/* Theme */}
+        <ThemeSection />
+
         {/* Logout */}
         <View style={styles.logoutSection}>
           <Button variant="danger" onPress={handleLogout} fullWidth>
@@ -290,7 +342,7 @@ export default function SettingsScreen() {
 
         {/* Version */}
         <Text style={[styles.version, { color: colors.textTertiary }]}>
-          ExpenseOwl Mobile v1.0.0
+          Xpense v1.0.0
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -425,5 +477,22 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     marginTop: spacing.lg,
     marginBottom: spacing.xl,
+  },
+  themeOptions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  themeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  themeOptionText: {
+    fontSize: fontSize.sm,
+    fontWeight: '500',
   },
 });

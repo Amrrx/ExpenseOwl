@@ -1,28 +1,28 @@
 {
   "expo": {
-    "name": "ExpenseOwl",
-    "slug": "expenseowl",
+    "name": "Xpense",
+    "slug": "xpense",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
-    "scheme": "expenseowl",
+    "scheme": "xpense",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a1a2e"
+      "backgroundColor": "#f9fafb"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.expenseowl.app"
+      "bundleIdentifier": "com.xpense.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1a1a2e"
+        "backgroundColor": "#f9fafb"
       },
-      "package": "com.expenseowl.app",
+      "package": "com.xpense.app",
       "permissions": ["RECORD_AUDIO"]
     },
     "web": {
@@ -36,7 +36,7 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Allow ExpenseOwl to access your microphone for voice expense entry."
+          "microphonePermission": "Allow Xpense to access your microphone for voice expense entry."
         }
       ]
     ]

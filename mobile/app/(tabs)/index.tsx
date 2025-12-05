@@ -273,7 +273,7 @@ export default function DashboardScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.logo, { color: colors.primary }]}>ExpenseOwl</Text>
+          <Text style={[styles.logo, { color: colors.primary }]}>Xpense</Text>
           <View style={styles.headerActions}>
             <TouchableOpacity onPress={handleManualEntry} style={styles.headerButton}>
               <Ionicons name="add-circle-outline" size={26} color={colors.text} />
