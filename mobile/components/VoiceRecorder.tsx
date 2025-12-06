@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, RecordingPresets, AudioModule } from 'expo-audio';
 import { useTheme, spacing, fontSize, borderRadius } from '../theme';
 import { hapticLight, hapticSuccess, hapticError } from '../utils/haptics';
 import { Button } from './Button';
@@ -14,12 +14,12 @@ interface VoiceRecorderProps {
 
 export function VoiceRecorder({ visible, onClose, onRecordingComplete }: VoiceRecorderProps) {
   const { colors } = useTheme();
-  const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   useEffect(() => {
     if (visible) {
@@ -31,7 +31,7 @@ export function VoiceRecorder({ visible, onClose, onRecordingComplete }: VoiceRe
   }, [visible]);
 
   useEffect(() => {
-    if (isRecording) {
+    if (audioRecorder.isRecording) {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -50,12 +50,12 @@ export function VoiceRecorder({ visible, onClose, onRecordingComplete }: VoiceRe
       return () => pulse.stop();
     }
     pulseAnim.setValue(1);
-  }, [isRecording, pulseAnim]);
+  }, [audioRecorder.isRecording, pulseAnim]);
 
   const checkPermissions = async () => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      setPermissionGranted(status === 'granted');
+      const status = await AudioModule.requestRecordingPermissionsAsync();
+      setPermissionGranted(status.granted);
     } catch {
       setPermissionGranted(false);
     }
@@ -63,16 +63,7 @@ export function VoiceRecorder({ visible, onClose, onRecordingComplete }: VoiceRe
 
   const startRecording = async () => {
     try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      recordingRef.current = recording;
-      setIsRecording(true);
+      audioRecorder.record();
       setDuration(0);
       hapticLight();
 
@@ -86,18 +77,14 @@ export function VoiceRecorder({ visible, onClose, onRecordingComplete }: VoiceRe
   };
 
   const stopRecording = async () => {
-    if (!recordingRef.current) return;
-
     try {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
 
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
-      setIsRecording(false);
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
 
       if (uri) {
         hapticSuccess();
@@ -107,24 +94,21 @@ export function VoiceRecorder({ visible, onClose, onRecordingComplete }: VoiceRe
     } catch (error) {
       console.error('Failed to stop recording:', error);
       hapticError();
-      setIsRecording(false);
     }
   };
 
   const cancelRecording = async () => {
-    if (recordingRef.current) {
+    if (audioRecorder.isRecording) {
       try {
         if (timerRef.current) {
           clearInterval(timerRef.current);
           timerRef.current = null;
         }
-        await recordingRef.current.stopAndUnloadAsync();
-        recordingRef.current = null;
+        await audioRecorder.stop();
       } catch {
         // Ignore errors during cancel
       }
     }
-    setIsRecording(false);
     setDuration(0);
     onClose();
   };
@@ -166,7 +150,7 @@ export function VoiceRecorder({ visible, onClose, onRecordingComplete }: VoiceRe
           {permissionGranted === true && (
             <View style={styles.content}>
               <Text style={[styles.instruction, { color: colors.textSecondary }]}>
-                {isRecording
+                {audioRecorder.isRecording
                   ? 'Speak your expense clearly...'
                   : 'Tap the button and describe your expense'}
               </Text>
@@ -175,20 +159,20 @@ export function VoiceRecorder({ visible, onClose, onRecordingComplete }: VoiceRe
                 <Animated.View
                   style={[
                     styles.recordButtonOuter,
-                    { borderColor: isRecording ? colors.danger : colors.primary },
+                    { borderColor: audioRecorder.isRecording ? colors.danger : colors.primary },
                     { transform: [{ scale: pulseAnim }] },
                   ]}
                 >
                   <TouchableOpacity
-                    onPress={isRecording ? stopRecording : startRecording}
+                    onPress={audioRecorder.isRecording ? stopRecording : startRecording}
                     style={[
                       styles.recordButton,
-                      { backgroundColor: isRecording ? colors.danger : colors.primary },
+                      { backgroundColor: audioRecorder.isRecording ? colors.danger : colors.primary },
                     ]}
                     activeOpacity={0.8}
                   >
                     <Ionicons
-                      name={isRecording ? 'stop' : 'mic'}
+                      name={audioRecorder.isRecording ? 'stop' : 'mic'}
                       size={32}
                       color="#fff"
                     />

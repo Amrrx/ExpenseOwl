@@ -4,6 +4,8 @@ import { View, ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeProvider, useTheme } from '../theme';
 import { ToastContainer } from '../components';
 import { useAuthStore } from '../stores/authStore';
@@ -13,10 +15,26 @@ function RootLayoutNav() {
   const router = useRouter();
   const segments = useSegments();
   const { isAuthenticated, isInitialized, initialize } = useAuthStore();
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext();
 
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  useEffect(() => {
+    if (hasShareIntent && shareIntent?.files && shareIntent.files.length > 0) {
+      const imageFile = shareIntent.files[0];
+      if (imageFile?.mimeType?.startsWith('image/') && imageFile.path) {
+        const sharedData = JSON.stringify({
+          path: imageFile.path,
+          mimeType: imageFile.mimeType,
+        });
+        AsyncStorage.setItem('shared_image', sharedData).then(() => {
+          resetShareIntent();
+        });
+      }
+    }
+  }, [hasShareIntent, shareIntent, resetShareIntent]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -60,9 +78,11 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <RootLayoutNav />
-      </ThemeProvider>
+      <ShareIntentProvider>
+        <ThemeProvider>
+          <RootLayoutNav />
+        </ThemeProvider>
+      </ShareIntentProvider>
     </GestureHandlerRootView>
   );
 }

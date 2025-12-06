@@ -281,6 +281,8 @@ class ApiService {
     const response = await this.client.post('/api/ai/receipt/parse', {
       imageData: imageBase64,
       mimeType: mimeType,
+    }, {
+      timeout: 60000, // 60s for AI image processing
     });
     return response.data;
   }

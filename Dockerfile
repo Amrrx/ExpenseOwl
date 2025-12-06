@@ -2,24 +2,23 @@ FROM golang:alpine AS builder
 
 WORKDIR /app
 
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY . .
 
-# Build the application
-RUN go build -o expenseowl ./cmd/expenseowl
+RUN go build -ldflags="-s -w" -o expenseowl ./cmd/expenseowl
 
-# Use a minimal alpine image for running
 FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
-# Create data directory if not exists
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data /app/logs
 
-# Copy the binary from builder
 COPY --from=builder /app/expenseowl .
 
-# Expose the default port
 EXPOSE 8080
 
-# Run the server
-CMD ["./expenseowl"]
+CMD ["./expenseowl", "--auth"]

@@ -4,14 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tanq16/expenseowl/internal/auth"
+	"github.com/tanq16/expenseowl/internal/logging"
 	"github.com/tanq16/expenseowl/internal/storage"
 )
 
@@ -62,6 +61,7 @@ type UserInfo struct {
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logging.Warn("register_invalid_body", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -71,11 +71,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	req.FullName = storage.SanitizeString(req.FullName)
 
 	if req.Email == "" || req.Password == "" {
+		logging.Warn("register_missing_fields", "email", req.Email)
 		http.Error(w, "Email and password are required", http.StatusBadRequest)
 		return
 	}
 
 	if len(req.Password) < 8 {
+		logging.Warn("register_weak_password", "email", req.Email)
 		http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
 		return
 	}
@@ -84,11 +86,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var exists bool
 	err := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)", req.Email).Scan(&exists)
 	if err != nil {
+		logging.Error("register_db_error", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	if exists {
+		logging.Warn("register_email_exists", "email", req.Email)
 		http.Error(w, "User with this email already exists", http.StatusConflict)
 		return
 	}
@@ -96,6 +100,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Hash password
 	passwordHash, err := auth.HashPassword(req.Password)
 	if err != nil {
+		logging.Error("register_hash_error", "error", err)
 		http.Error(w, "Failed to process password", http.StatusInternalServerError)
 		return
 	}
@@ -110,6 +115,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	`, userID, req.Email, passwordHash, req.FullName, now)
 
 	if err != nil {
+		logging.Error("register_create_error", "email", req.Email, "error", err)
 		http.Error(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}
@@ -121,13 +127,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	`, userID, `["Food", "Groceries", "Travel", "Rent", "Utilities", "Entertainment", "Healthcare", "Shopping", "Miscellaneous", "Income"]`, "usd", 1)
 
 	if err != nil {
-		// Log error but don't fail registration
-		// User can set config later
+		logging.Warn("register_config_error", "user_id", userID, "error", err)
 	}
 
 	// Generate tokens
 	tokens, err := h.jwtManager.GenerateTokenPair(userID, req.Email)
 	if err != nil {
+		logging.Error("register_token_error", "user_id", userID, "error", err)
 		http.Error(w, "Failed to generate tokens", http.StatusInternalServerError)
 		return
 	}
@@ -135,10 +141,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Store refresh token
 	err = h.storeRefreshToken(userID, tokens.RefreshToken)
 	if err != nil {
-		log.Printf("Failed to store refresh token: %v", err)
-		http.Error(w, fmt.Sprintf("Failed to store refresh token: %v", err), http.StatusInternalServerError)
+		logging.Error("register_store_token_error", "user_id", userID, "error", err)
+		http.Error(w, "Failed to store refresh token", http.StatusInternalServerError)
 		return
 	}
+
+	logging.Info("user_registered", "user_id", userID, "email", req.Email)
 
 	// Return user info and tokens
 	response := AuthResponse{
@@ -159,6 +167,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logging.Warn("login_invalid_body", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -166,6 +175,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 
 	if req.Email == "" || req.Password == "" {
+		logging.Warn("login_missing_fields", "email", req.Email)
 		http.Error(w, "Email and password are required", http.StatusBadRequest)
 		return
 	}
@@ -188,20 +198,24 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			logging.Warn("login_user_not_found", "email", req.Email)
 			http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 			return
 		}
+		logging.Error("login_db_error", "email", req.Email, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	if !user.IsActive {
+		logging.Warn("login_inactive_account", "user_id", user.ID, "email", req.Email)
 		http.Error(w, "Account is deactivated", http.StatusForbidden)
 		return
 	}
 
 	// Check password
 	if err := auth.CheckPassword(req.Password, user.PasswordHash); err != nil {
+		logging.Warn("login_invalid_password", "user_id", user.ID, "email", req.Email)
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
@@ -209,6 +223,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Generate tokens
 	tokens, err := h.jwtManager.GenerateTokenPair(user.ID, user.Email)
 	if err != nil {
+		logging.Error("login_token_error", "user_id", user.ID, "error", err)
 		http.Error(w, "Failed to generate tokens", http.StatusInternalServerError)
 		return
 	}
@@ -216,9 +231,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Store refresh token
 	err = h.storeRefreshToken(user.ID, tokens.RefreshToken)
 	if err != nil {
+		logging.Error("login_store_token_error", "user_id", user.ID, "error", err)
 		http.Error(w, "Failed to store refresh token", http.StatusInternalServerError)
 		return
 	}
+
+	logging.Info("user_login", "user_id", user.ID, "email", user.Email)
 
 	// Return user info and tokens
 	response := AuthResponse{
@@ -239,6 +257,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logging.Warn("refresh_invalid_body", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -246,6 +265,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	// Validate refresh token
 	claims, err := h.jwtManager.ValidateToken(req.RefreshToken, auth.RefreshToken)
 	if err != nil {
+		logging.Warn("refresh_invalid_token", "error", err)
 		http.Error(w, "Invalid or expired refresh token", http.StatusUnauthorized)
 		return
 	}
@@ -260,6 +280,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	`, claims.UserID, req.RefreshToken).Scan(&exists)
 
 	if err != nil || !exists {
+		logging.Warn("refresh_token_revoked", "user_id", claims.UserID)
 		http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
 		return
 	}
@@ -267,6 +288,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	// Generate new token pair
 	tokens, err := h.jwtManager.GenerateTokenPair(claims.UserID, claims.Email)
 	if err != nil {
+		logging.Error("refresh_generate_error", "user_id", claims.UserID, "error", err)
 		http.Error(w, "Failed to generate tokens", http.StatusInternalServerError)
 		return
 	}
@@ -279,15 +301,18 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	`, time.Now(), claims.UserID, req.RefreshToken)
 
 	if err != nil {
-		// Log error but continue
+		logging.Warn("refresh_revoke_error", "user_id", claims.UserID, "error", err)
 	}
 
 	// Store new refresh token
 	err = h.storeRefreshToken(claims.UserID, tokens.RefreshToken)
 	if err != nil {
+		logging.Error("refresh_store_error", "user_id", claims.UserID, "error", err)
 		http.Error(w, "Failed to store refresh token", http.StatusInternalServerError)
 		return
 	}
+
+	logging.Debug("token_refreshed", "user_id", claims.UserID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tokens)
@@ -297,6 +322,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logging.Warn("logout_invalid_body", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -304,7 +330,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Validate refresh token to get user ID
 	claims, err := h.jwtManager.ValidateToken(req.RefreshToken, auth.RefreshToken)
 	if err != nil {
-		// Even if token is invalid, return success for logout
+		logging.Debug("logout_invalid_token")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
 		return
@@ -316,6 +342,12 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		SET revoked = true, revoked_at = $1
 		WHERE user_id = $2 AND token = $3 AND revoked = false
 	`, time.Now(), claims.UserID, req.RefreshToken)
+
+	if err != nil {
+		logging.Warn("logout_revoke_error", "user_id", claims.UserID, "error", err)
+	}
+
+	logging.Info("user_logout", "user_id", claims.UserID)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})

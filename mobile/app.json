@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "Xpense",
-    "slug": "xpense",
+    "name": "Clink",
+    "slug": "clink",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
-    "scheme": "xpense",
+    "newArchEnabled": true,
+    "scheme": "clink",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -15,14 +15,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.xpense.app"
+      "bundleIdentifier": "com.clink.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#f9fafb"
       },
-      "package": "com.xpense.app",
+      "package": "com.clink.app",
       "permissions": ["RECORD_AUDIO", "CAMERA", "READ_EXTERNAL_STORAGE"]
     },
     "web": {
@@ -30,22 +30,56 @@
       "bundler": "metro"
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "mainActivityLaunchMode": "singleTask"
+          }
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsImageWithMaxCount": 1
+          },
+          "androidIntentFilters": ["image/*"]
+        }
+      ],
       "expo-router",
       "expo-secure-store",
       "expo-dev-client",
       [
-        "expo-av",
+        "expo-audio",
         {
-          "microphonePermission": "Allow Xpense to access your microphone for voice expense entry."
+          "microphonePermission": "Allow Clink to access your microphone for voice expense entry."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Xpense to access your photos to scan receipts.",
-          "cameraPermission": "Allow Xpense to use your camera to scan receipts."
+          "photosPermission": "Allow Clink to access your photos to scan receipts.",
+          "cameraPermission": "Allow Clink to use your camera to scan receipts."
         }
-      ]
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "QuickExpense",
+              "label": "Quick Expense",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "description": "Add expense via voice or camera",
+              "previewImage": "./assets/widget-preview.png",
+              "resizeMode": "none"
+            }
+          ]
+        }
+      ],
+      "@react-native-google-signin/google-signin"
     ]
   }
 }

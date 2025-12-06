@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/tanq16/expenseowl/internal/ai"
+	"github.com/tanq16/expenseowl/internal/logging"
 	"github.com/tanq16/expenseowl/internal/storage"
 )
 
@@ -236,6 +236,7 @@ func (h *PostgresHandler) AddExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID, _ := GetUserID(r)
 	store, err := h.getUserStorage(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -244,15 +245,18 @@ func (h *PostgresHandler) AddExpense(w http.ResponseWriter, r *http.Request) {
 
 	var expense storage.Expense
 	if err := json.NewDecoder(r.Body).Decode(&expense); err != nil {
+		logging.Warn("expense_add_invalid_body", "user_id", userID, "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if err := store.AddExpense(expense); err != nil {
+		logging.Error("expense_add_error", "user_id", userID, "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	logging.Info("expense_added", "user_id", userID, "expense_id", expense.ID, "amount", expense.Amount)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(expense)
 }
@@ -264,6 +268,7 @@ func (h *PostgresHandler) EditExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID, _ := GetUserID(r)
 	store, err := h.getUserStorage(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -278,15 +283,18 @@ func (h *PostgresHandler) EditExpense(w http.ResponseWriter, r *http.Request) {
 
 	var expense storage.Expense
 	if err := json.NewDecoder(r.Body).Decode(&expense); err != nil {
+		logging.Warn("expense_edit_invalid_body", "user_id", userID, "expense_id", id, "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if err := store.UpdateExpense(id, expense); err != nil {
+		logging.Error("expense_edit_error", "user_id", userID, "expense_id", id, "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	logging.Info("expense_updated", "user_id", userID, "expense_id", id)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -297,6 +305,7 @@ func (h *PostgresHandler) DeleteExpense(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	userID, _ := GetUserID(r)
 	store, err := h.getUserStorage(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -310,10 +319,12 @@ func (h *PostgresHandler) DeleteExpense(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := store.RemoveExpense(id); err != nil {
+		logging.Error("expense_delete_error", "user_id", userID, "expense_id", id, "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	logging.Info("expense_deleted", "user_id", userID, "expense_id", id)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -572,8 +583,8 @@ func (h *PostgresHandler) ParseVoiceExpense(w http.ResponseWriter, r *http.Reque
 	// Check if AI is enabled
 	aiConfig, err := store.GetAIConfig()
 	if err != nil {
+		logging.Error("voice_parse_ai_config_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get AI config"})
-		log.Printf("API ERROR: Failed to get AI config: %v\n", err)
 		return
 	}
 
@@ -609,23 +620,23 @@ func (h *PostgresHandler) ParseVoiceExpense(w http.ResponseWriter, r *http.Reque
 	// Get user's categories and currency
 	categories, err := store.GetCategories()
 	if err != nil {
+		logging.Error("voice_parse_categories_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get categories"})
-		log.Printf("API ERROR: Failed to get categories: %v\n", err)
 		return
 	}
 
 	currency, err := store.GetCurrency()
 	if err != nil {
+		logging.Error("voice_parse_currency_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get currency"})
-		log.Printf("API ERROR: Failed to get currency: %v\n", err)
 		return
 	}
 
 	// Create AI provider
 	provider, err := ai.NewProvider(ai.ProviderType(aiConfig.Provider), aiConfig.APIKey, aiConfig.Model)
 	if err != nil {
+		logging.Error("voice_parse_provider_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to create AI provider: %v", err)})
-		log.Printf("API ERROR: Failed to create AI provider: %v\n", err)
 		return
 	}
 
@@ -640,14 +651,13 @@ func (h *PostgresHandler) ParseVoiceExpense(w http.ResponseWriter, r *http.Reque
 
 	response, err := provider.ParseVoiceExpense(parseReq)
 	if err != nil {
+		logging.Error("voice_parse_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to parse voice: %v", err)})
-		log.Printf("API ERROR: Failed to parse voice: %v\n", err)
 		return
 	}
 
-	// Return parsed expenses for review
+	logging.Info("voice_parsed", "expense_count", len(response.Expenses))
 	writeJSON(w, http.StatusOK, response)
-	log.Printf("HTTP: Successfully parsed %d expenses from voice input\n", len(response.Expenses))
 }
 
 // ParseVoiceExpenseBase64 handles voice input parsing with JSON base64 encoded audio
@@ -715,6 +725,7 @@ func (h *PostgresHandler) ParseVoiceExpenseBase64(w http.ResponseWriter, r *http
 
 // ParseReceiptExpense handles receipt image parsing with JSON base64 encoded image
 func (h *PostgresHandler) ParseReceiptExpense(w http.ResponseWriter, r *http.Request) {
+	logging.Debug("receipt_parse_request")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -729,8 +740,8 @@ func (h *PostgresHandler) ParseReceiptExpense(w http.ResponseWriter, r *http.Req
 	// Check if AI is enabled
 	aiConfig, err := store.GetAIConfig()
 	if err != nil {
+		logging.Error("receipt_parse_ai_config_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get AI config"})
-		log.Printf("API ERROR: Failed to get AI config: %v\n", err)
 		return
 	}
 
@@ -774,23 +785,23 @@ func (h *PostgresHandler) ParseReceiptExpense(w http.ResponseWriter, r *http.Req
 	// Get user's categories and currency
 	categories, err := store.GetCategories()
 	if err != nil {
+		logging.Error("receipt_parse_categories_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get categories"})
-		log.Printf("API ERROR: Failed to get categories: %v\n", err)
 		return
 	}
 
 	currency, err := store.GetCurrency()
 	if err != nil {
+		logging.Error("receipt_parse_currency_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get currency"})
-		log.Printf("API ERROR: Failed to get currency: %v\n", err)
 		return
 	}
 
 	// Create AI provider
 	provider, err := ai.NewProvider(ai.ProviderType(aiConfig.Provider), aiConfig.APIKey, aiConfig.Model)
 	if err != nil {
+		logging.Error("receipt_parse_provider_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to create AI provider: %v", err)})
-		log.Printf("API ERROR: Failed to create AI provider: %v\n", err)
 		return
 	}
 
@@ -804,19 +815,19 @@ func (h *PostgresHandler) ParseReceiptExpense(w http.ResponseWriter, r *http.Req
 		TranslateToEnglish: aiConfig.TranslateToEnglish,
 	}
 
+	logging.Debug("receipt_parse_calling_ai", "size_bytes", len(imageBytes), "mime_type", mimeType)
 	response, err := provider.ParseReceiptImage(parseReq)
 	if err != nil {
+		logging.Error("receipt_parse_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to parse receipt: %v", err)})
-		log.Printf("API ERROR: Failed to parse receipt: %v\n", err)
 		return
 	}
 
-	// Return parsed expense for review
 	writeJSON(w, http.StatusOK, response)
 	if response.Expense != nil {
-		log.Printf("HTTP: Successfully parsed receipt from %s for %.2f\n", response.Merchant, response.Expense.Amount)
+		logging.Info("receipt_parsed", "merchant", response.Merchant, "amount", response.Expense.Amount)
 	} else {
-		log.Printf("HTTP: Receipt parsing returned no expense (message: %s)\n", response.Message)
+		logging.Warn("receipt_parse_no_expense", "message", response.Message)
 	}
 }
 
@@ -843,8 +854,8 @@ func (h *PostgresHandler) GetUserPreferences(w http.ResponseWriter, r *http.Requ
 
 	aiConfig, err := store.GetAIConfig()
 	if err != nil {
+		logging.Error("preferences_get_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get preferences"})
-		log.Printf("API ERROR: Failed to get AI config for preferences: %v\n", err)
 		return
 	}
 
@@ -877,19 +888,19 @@ func (h *PostgresHandler) UpdateUserPreferences(w http.ResponseWriter, r *http.R
 	// Get current AI config and update only user preferences
 	aiConfig, err := store.GetAIConfig()
 	if err != nil {
+		logging.Error("preferences_update_get_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get current config"})
-		log.Printf("API ERROR: Failed to get AI config: %v\n", err)
 		return
 	}
 
 	aiConfig.TranslateToEnglish = prefs.TranslateToEnglish
 
 	if err := store.UpdateAIConfig(*aiConfig); err != nil {
+		logging.Error("preferences_save_error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to save preferences"})
-		log.Printf("API ERROR: Failed to save preferences: %v\n", err)
 		return
 	}
 
+	logging.Info("preferences_updated")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "success"})
-	log.Println("HTTP: User preferences updated successfully")
 }

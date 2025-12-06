@@ -12,6 +12,7 @@ import (
 	"github.com/tanq16/expenseowl/internal/api"
 	"github.com/tanq16/expenseowl/internal/auth"
 	"github.com/tanq16/expenseowl/internal/config"
+	"github.com/tanq16/expenseowl/internal/logging"
 	"github.com/tanq16/expenseowl/internal/storage"
 )
 
@@ -95,6 +96,11 @@ func runAuthServer(port int) {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	// Initialize logging
+	if err := logging.Init(cfg.LogLevel, cfg.LogOutput, cfg.LogDir); err != nil {
+		log.Fatalf("Failed to initialize logging: %v", err)
+	}
+
 	// Connect to PostgreSQL
 	db, err := sql.Open("postgres", cfg.ConnectionString())
 	if err != nil {
@@ -102,11 +108,16 @@ func runAuthServer(port int) {
 	}
 	defer db.Close()
 
+	// Configure connection pool
+	db.SetMaxOpenConns(cfg.DBMaxOpenConns)
+	db.SetMaxIdleConns(cfg.DBMaxIdleConns)
+	db.SetConnMaxLifetime(cfg.DBConnMaxLifetime)
+
 	if err := db.Ping(); err != nil {
 		log.Fatalf("Failed to ping database: %v", err)
 	}
 
-	log.Println("✅ Connected to PostgreSQL database")
+	logging.Info("database_connected")
 
 	// Initialize JWT manager
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTAccessTokenExpiry, cfg.JWTRefreshTokenExpiry)
@@ -193,16 +204,19 @@ func runAuthServer(port int) {
 	// Legacy routes removed in multi-user mode
 	// Use /api/* endpoints with authentication instead
 
-	log.Println("🦉 ExpenseOwl Multi-User Server")
-	log.Printf("📊 Database: %s:%s/%s", cfg.DBHost, cfg.DBPort, cfg.DBName)
-	log.Printf("🔐 JWT Expiry: Access=%v, Refresh=%v", cfg.JWTAccessTokenExpiry, cfg.JWTRefreshTokenExpiry)
-	log.Printf("🚀 Server starting on port %d...", port)
-	log.Println("🔓 Public endpoints: /api/auth/*, /health, /version")
-	log.Println("🔒 Protected endpoints: /api/* (requires Bearer token)")
-	log.Println("🌐 CORS enabled for all origins")
+	logging.Info("ExpenseOwl Multi-User Server")
+	logging.Info("database", "host", cfg.DBHost, "port", cfg.DBPort, "name", cfg.DBName)
+	logging.Info("jwt_config", "access_expiry", cfg.JWTAccessTokenExpiry, "refresh_expiry", cfg.JWTRefreshTokenExpiry)
+	logging.Info("server_starting", "port", port)
+	logging.Info("public_endpoints", "paths", "/api/auth/*, /health, /version")
+	logging.Info("protected_endpoints", "paths", "/api/*", "auth", "Bearer token")
+	logging.Info("cors_enabled", "origins", "all")
 
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), api.CORSMiddleware(http.DefaultServeMux)); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	// Chain middlewares: RequestLogger -> CORS -> routes
+	handler := logging.RequestLogger(api.CORSMiddleware(http.DefaultServeMux))
+
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), handler); err != nil {
+		logging.Error("server_failed", "error", err)
 	}
 }
 

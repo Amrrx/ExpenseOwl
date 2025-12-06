@@ -63,7 +63,7 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Text style={[styles.logo, { color: colors.primary }]}>ExpenseOwl</Text>
+            <Text style={[styles.logo, { color: colors.primary }]}>Clink</Text>
             <Text style={[styles.title, { color: colors.text }]}>Create account</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Start tracking your expenses today

@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tanq16/expenseowl/internal/auth"
+	"github.com/tanq16/expenseowl/internal/logging"
 	"google.golang.org/api/idtoken"
 )
 
@@ -78,7 +78,7 @@ func (h *OAuthHandler) GoogleVerify(w http.ResponseWriter, r *http.Request) {
 	// Verify Google ID token
 	payload, err := idtoken.Validate(context.Background(), req.IDToken, h.googleClientID)
 	if err != nil {
-		log.Printf("Failed to verify Google ID token: %v", err)
+		logging.Warn("google_oauth_invalid_token", "error", err)
 		http.Error(w, "Invalid ID token", http.StatusUnauthorized)
 		return
 	}
@@ -90,6 +90,7 @@ func (h *OAuthHandler) GoogleVerify(w http.ResponseWriter, r *http.Request) {
 	providerUserID := payload.Subject
 
 	if email == "" || !emailVerified {
+		logging.Warn("google_oauth_email_not_verified", "email", email)
 		http.Error(w, "Email not verified", http.StatusBadRequest)
 		return
 	}
@@ -97,7 +98,7 @@ func (h *OAuthHandler) GoogleVerify(w http.ResponseWriter, r *http.Request) {
 	// Find or create user and OAuth account
 	user, isNewUser, err := h.findOrCreateOAuthUser("google", providerUserID, email, name, req.IDToken, "")
 	if err != nil {
-		log.Printf("Failed to find/create OAuth user: %v", err)
+		logging.Error("google_oauth_user_error", "email", email, "error", err)
 		http.Error(w, "Failed to process OAuth login", http.StatusInternalServerError)
 		return
 	}
@@ -105,17 +106,19 @@ func (h *OAuthHandler) GoogleVerify(w http.ResponseWriter, r *http.Request) {
 	// Generate JWT tokens
 	tokens, err := h.jwtManager.GenerateTokenPair(user.ID, user.Email)
 	if err != nil {
-		log.Printf("Failed to generate tokens: %v", err)
+		logging.Error("google_oauth_token_error", "user_id", user.ID, "error", err)
 		http.Error(w, "Failed to generate tokens", http.StatusInternalServerError)
 		return
 	}
 
 	// Store refresh token
 	if err := h.storeRefreshToken(user.ID, tokens.RefreshToken); err != nil {
-		log.Printf("Failed to store refresh token: %v", err)
+		logging.Error("google_oauth_store_token_error", "user_id", user.ID, "error", err)
 		http.Error(w, "Failed to store refresh token", http.StatusInternalServerError)
 		return
 	}
+
+	logging.Info("google_oauth_login", "user_id", user.ID, "email", user.Email, "is_new_user", isNewUser)
 
 	// Return response
 	response := OAuthVerifyResponse{

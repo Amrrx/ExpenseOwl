@@ -3,16 +3,20 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
 type Config struct {
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
-	DBSSLMode  string
+	DBHost            string
+	DBPort            string
+	DBUser            string
+	DBPassword        string
+	DBName            string
+	DBSSLMode         string
+	DBMaxOpenConns    int
+	DBMaxIdleConns    int
+	DBConnMaxLifetime time.Duration
 
 	JWTSecret              string
 	JWTAccessTokenExpiry   time.Duration
@@ -29,17 +33,24 @@ type Config struct {
 	AppleRedirectURI     string
 
 	ServerPort string
+
+	LogLevel  string
+	LogOutput string // "stdout", "file", or "both"
+	LogDir    string
 }
 
 // Load reads configuration from environment variables
 func Load() (*Config, error) {
 	cfg := &Config{
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBPort:     getEnv("DB_PORT", "5432"),
-		DBUser:     getEnv("DB_USER", "expenseowl"),
-		DBPassword: getEnv("DB_PASSWORD", ""),
-		DBName:     getEnv("DB_NAME", "expenseowl"),
-		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
+		DBHost:            getEnv("DB_HOST", "localhost"),
+		DBPort:            getEnv("DB_PORT", "5432"),
+		DBUser:            getEnv("DB_USER", "expenseowl"),
+		DBPassword:        getEnv("DB_PASSWORD", ""),
+		DBName:            getEnv("DB_NAME", "expenseowl"),
+		DBSSLMode:         getEnv("DB_SSLMODE", "disable"),
+		DBMaxOpenConns:    getEnvInt("DB_MAX_OPEN_CONNS", 25),
+		DBMaxIdleConns:    getEnvInt("DB_MAX_IDLE_CONNS", 5),
+		DBConnMaxLifetime: parseDuration(getEnv("DB_CONN_MAX_LIFETIME", "5m"), 5*time.Minute),
 
 		JWTSecret:              getEnv("JWT_SECRET", "change-this-in-production"),
 		JWTAccessTokenExpiry:   parseDuration(getEnv("JWT_ACCESS_TOKEN_EXPIRY", "15m"), 15*time.Minute),
@@ -56,6 +67,10 @@ func Load() (*Config, error) {
 		AppleRedirectURI:    getEnv("APPLE_REDIRECT_URI", "http://localhost:8080/api/auth/apple/callback"),
 
 		ServerPort: getEnv("PORT", "8080"),
+
+		LogLevel:  getEnv("LOG_LEVEL", "info"),
+		LogOutput: getEnv("LOG_OUTPUT", "stdout"),
+		LogDir:    getEnv("LOG_DIR", "./logs"),
 	}
 
 	if cfg.JWTSecret == "change-this-in-production" || cfg.JWTSecret == "change-this-to-a-random-secret-key-in-production" {
@@ -74,6 +89,15 @@ func (c *Config) ConnectionString() string {
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if intVal, err := strconv.Atoi(value); err == nil {
+			return intVal
+		}
 	}
 	return defaultValue
 }

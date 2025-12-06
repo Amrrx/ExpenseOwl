@@ -3,6 +3,8 @@
 ## In Progress
 - [ ] Final testing and bug fixes
 - [x] Make mobile API URL configurable (app.config.js)
+- [ ] Android rebuild needed (expo-image-manipulator, google-signin)
+- [ ] Google OAuth - need to create Google Cloud OAuth clientId and set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
 
 ## Priority 1 - Polish
 - [x] Add loading states/skeleton screens during data fetches
@@ -39,9 +41,9 @@
 ## Zero-Friction Capture (Goal: minimum effort expense logging)
 
 ### Clear - Ready to Implement
-- [ ] Home screen widget (voice + camera buttons - add expense without opening app)
+- [x] Home screen widget (voice + camera buttons - opens app with popup)
 - [ ] Minimal form mode (only amount required, auto-detect category from time/patterns)
-- [ ] Share Sheet integration (receive shared images from other apps → parse as receipt)
+- [x] Share Sheet integration (receive shared images from other apps → parse as receipt)
 - [ ] Text paste input (paste any text → AI extracts expense details)
 
 ### Discussion Needed
@@ -90,13 +92,18 @@
 - [x] Expense form with category selection
 - [x] Development build (expo-dev-client) for Android
 - [x] Disabled New Architecture to fix navigation crash
-- [x] Voice expense entry UI (VoiceRecorder component with expo-av)
+- [x] Voice expense entry UI (VoiceRecorder component with expo-audio)
 - [x] Sync status indicator (SyncIndicator component in header)
 - [x] Offline support with local storage (offlineStore with caching and queue)
 - [x] Microphone permission configured in app.json
 - [x] Make API URL configurable (app.config.js with EXPO_PUBLIC_API_URL)
 - [x] Voice input UX (FAB opens voice, processing overlay, error handling)
 - [x] AI config (server-controlled via env vars, no UI needed)
+- [x] Receipt photo scanning (camera button, AI parsing via backend)
+- [x] Home screen widget (QuickExpense with voice + camera buttons)
+- [x] Share Sheet integration (expo-share-intent for receiving shared images)
+- [x] Image compression for shared receipts (expo-image-manipulator, 60s API timeout)
+- [x] Google Sign-In button and integration (@react-native-google-signin)
 - [ ] iOS build and testing
 - [ ] Production APK build
 - [ ] App Store / Play Store submission

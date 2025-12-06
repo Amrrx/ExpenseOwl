@@ -3,8 +3,11 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, A
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { PieChart, BarChart } from 'react-native-gifted-charts';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { useTheme, spacing, fontSize, chartColors } from '../../theme';
 import { Card, FAB, ExpenseForm, SyncIndicator, VoiceRecorder, BatchExpenseReview, ReceiptScanner } from '../../components';
+import type { Expense, Config } from '../../types';
 import { api } from '../../services/api';
 import { useToastStore } from '../../stores/toastStore';
 import { useSyncStore } from '../../stores/syncStore';
@@ -12,7 +15,6 @@ import { useOfflineStore } from '../../stores/offlineStore';
 import { formatCurrency, COLOR_PALETTE } from '../../utils/currency';
 import { formatMonth, getMonthBounds, formatDateForInput } from '../../utils/dates';
 import { hapticSelection, hapticSuccess, hapticError, hapticLight } from '../../utils/haptics';
-import type { Expense, Config } from '../../types';
 
 // Get store state without triggering re-renders
 const getOfflineState = () => useOfflineStore.getState();
@@ -55,6 +57,69 @@ export default function DashboardScreen() {
     useOfflineStore.getState().initialize();
   }, []);
 
+
+  // Check for widget action and shared images on mount and when app comes to foreground
+  const checkWidgetAction = useCallback(async () => {
+    const action = await AsyncStorage.getItem('widget_action');
+    if (action) {
+      await AsyncStorage.removeItem('widget_action');
+      if (action === 'voice') {
+        setShowVoiceRecorder(true);
+      } else if (action === 'camera') {
+        setShowReceiptScanner(true);
+      }
+      return;
+    }
+
+    const sharedImageData = await AsyncStorage.getItem('shared_image');
+    if (sharedImageData) {
+      await AsyncStorage.removeItem('shared_image');
+      const { path, mimeType } = JSON.parse(sharedImageData);
+      processSharedImage(path, mimeType);
+    }
+  }, []);
+
+  const processSharedImage = async (imagePath: string, _mimeType: string = 'image/jpeg') => {
+    setIsParsingReceipt(true);
+    try {
+      const compressed = await ImageManipulator.manipulateAsync(
+        imagePath,
+        [{ resize: { width: 1920 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+      if (!compressed.base64) {
+        throw new Error('Failed to compress image');
+      }
+      const result = await api.parseReceiptImage(compressed.base64, 'image/jpeg');
+      if (result?.expense) {
+        const validCategory = config?.categories.includes(result.expense.category)
+          ? result.expense.category
+          : config?.categories[0] || 'Miscellaneous';
+
+        setParsedExpenseData({
+          name: result.expense.name,
+          amount: result.expense.amount,
+          category: validCategory,
+          date: result.expense.date,
+        });
+        hapticSuccess();
+        setShowExpenseForm(true);
+      } else {
+        hapticError();
+        toast.error('Could not parse receipt');
+      }
+    } catch {
+      hapticError();
+      toast.error('Failed to process shared image');
+    } finally {
+      setIsParsingReceipt(false);
+    }
+  };
+
+  useEffect(() => {
+    checkWidgetAction();
+  }, [checkWidgetAction]);
+
   // Auto-sync when app comes to foreground
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextState => {
@@ -62,11 +127,12 @@ export default function DashboardScreen() {
         if (isOnline && offlineQueue.length > 0) {
           syncStore.sync();
         }
+        checkWidgetAction();
       }
       appState.current = nextState;
     });
     return () => subscription.remove();
-  }, [isOnline, offlineQueue.length]);
+  }, [isOnline, offlineQueue.length, checkWidgetAction]);
 
   const loadData = useCallback(async (showLoader = true) => {
     if (showLoader) setIsLoading(true);
