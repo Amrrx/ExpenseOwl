@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.clink.app"
+      "bundleIdentifier": "com.clink.app",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,6 +24,7 @@
         "backgroundColor": "#f9fafb"
       },
       "package": "com.clink.app",
+      "versionCode": 1,
       "permissions": ["RECORD_AUDIO", "CAMERA", "READ_EXTERNAL_STORAGE"]
     },
     "web": {

@@ -1,5 +1,7 @@
 FROM golang:alpine AS builder
 
+ARG VERSION=dev
+
 WORKDIR /app
 
 COPY go.mod go.sum ./
@@ -7,7 +9,7 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -ldflags="-s -w" -o expenseowl ./cmd/expenseowl
+RUN go build -ldflags="-s -w -X main.version=${VERSION}" -o expenseowl ./cmd/expenseowl
 
 FROM alpine:latest
 

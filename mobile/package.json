@@ -9,6 +9,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "postinstall": "patch-package",
+    "release": "node scripts/release.js",
     "build:preview": "eas build --profile preview --platform all",
     "build:production": "eas build --profile production --platform all",
     "build:android": "eas build --profile preview --platform android",
