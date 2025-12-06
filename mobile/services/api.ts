@@ -257,6 +257,33 @@ class ApiService {
     });
     return response.data;
   }
+
+  // Receipt scanning
+  async parseReceiptImage(imageBase64: string, mimeType: string = 'image/jpeg'): Promise<{
+    expense: {
+      name: string;
+      amount: number;
+      category: string;
+      date: string;
+      confidence: number;
+      ambiguous: boolean;
+    } | null;
+    merchant: string;
+    receiptDate: string;
+    items: Array<{
+      description: string;
+      quantity: number;
+      amount: number;
+    }>;
+    needsReview: boolean;
+    message: string;
+  }> {
+    const response = await this.client.post('/api/ai/receipt/parse', {
+      imageData: imageBase64,
+      mimeType: mimeType,
+    });
+    return response.data;
+  }
 }
 
 export const api = new ApiService();

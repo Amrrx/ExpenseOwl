@@ -1,24 +1,15 @@
-import { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  I18nManager,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme, spacing, fontSize, borderRadius } from '../theme';
-import { Button } from './Button';
-import { api } from '../services/api';
-import { useToastStore } from '../stores/toastStore';
-import { hapticSuccess, hapticError, hapticLight, hapticWarning } from '../utils/haptics';
-import { formatCurrency } from '../utils/currency';
-import { formatDateForInput } from '../utils/dates';
-import type { Config } from '../types';
+import { useState, useEffect } from "react";
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, I18nManager } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme, spacing, fontSize, borderRadius } from "../theme";
+import { Button } from "./Button";
+import { api } from "../services/api";
+import { useToastStore } from "../stores/toastStore";
+import { hapticSuccess, hapticError, hapticLight, hapticWarning } from "../utils/haptics";
+import { formatCurrency } from "../utils/currency";
+import { formatDateForInput } from "../utils/dates";
+import type { Config } from "../types";
 
 // RTL character ranges: Arabic, Hebrew, Persian, Urdu
 const RTL_REGEX = /[\u0591-\u07FF\u200F\u202B\u202E\uFB1D-\uFDFD\uFE70-\uFEFC]/;
@@ -65,11 +56,11 @@ export function BatchExpenseReview({
     setEditingIndex(null);
   }, [initialExpenses]);
 
-  const currency = config?.currency || 'usd';
+  const currency = config?.currency || "usd";
 
   const handleRemove = (index: number) => {
     hapticWarning();
-    setExpenses(prev => prev.filter((_, i) => i !== index));
+    setExpenses((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleEdit = (index: number) => {
@@ -78,18 +69,16 @@ export function BatchExpenseReview({
   };
 
   const handleUpdateExpense = (index: number, field: keyof ParsedExpense, value: string | number) => {
-    setExpenses(prev =>
-      prev.map((exp, i) => (i === index ? { ...exp, [field]: value } : exp))
-    );
+    setExpenses((prev) => prev.map((exp, i) => (i === index ? { ...exp, [field]: value } : exp)));
   };
 
   const handleCategoryChange = (index: number, category: string) => {
-    handleUpdateExpense(index, 'category', category);
+    handleUpdateExpense(index, "category", category);
   };
 
   const handleSaveAll = async () => {
     if (expenses.length === 0) {
-      toast.warning('No expenses to save');
+      toast.warning("No expenses to save");
       return;
     }
 
@@ -105,7 +94,7 @@ export function BatchExpenseReview({
           category: exp.category,
           date: new Date(exp.date).toISOString(),
           tags: [],
-          currency: config?.currency || 'usd',
+          currency: config?.currency || "usd",
         });
         savedCount++;
       } catch {
@@ -117,7 +106,7 @@ export function BatchExpenseReview({
 
     if (failedCount === 0) {
       hapticSuccess();
-      toast.success(`${savedCount} expense${savedCount > 1 ? 's' : ''} added`);
+      toast.success(`${savedCount} expense${savedCount > 1 ? "s" : ""} added`);
       onSave();
       onClose();
     } else if (savedCount > 0) {
@@ -127,7 +116,7 @@ export function BatchExpenseReview({
       onClose();
     } else {
       hapticError();
-      toast.error('Failed to save expenses');
+      toast.error("Failed to save expenses");
     }
   };
 
@@ -139,33 +128,22 @@ export function BatchExpenseReview({
   const totalAmount = expenses.reduce((sum, exp) => sum + Math.abs(exp.amount), 0);
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={handleClose}
-    >
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: colors.text }]}>
-            Review Expenses ({expenses.length})
-          </Text>
+          <Text style={[styles.title, { color: colors.text }]}>Review Expenses ({expenses.length})</Text>
           <View style={styles.closeButton} />
         </View>
 
         {/* Transcript */}
         {transcript && (
           <View style={[styles.transcriptBox, { backgroundColor: colors.surfaceSecondary }]}>
-            <Text style={[styles.transcriptLabel, { color: colors.textSecondary }]}>
-              What we heard:
-            </Text>
-            <Text style={[styles.transcriptText, { color: colors.text }]}>
-              "{transcript}"
-            </Text>
+            <Text style={[styles.transcriptLabel, { color: colors.textSecondary }]}>What we heard:</Text>
+            <Text style={[styles.transcriptText, { color: colors.text }]}>"{transcript}"</Text>
           </View>
         )}
 
@@ -191,9 +169,9 @@ export function BatchExpenseReview({
                           isRTL && styles.textRTL,
                         ]}
                         value={exp.name}
-                        onChangeText={(val) => handleUpdateExpense(index, 'name', val)}
+                        onChangeText={(val) => handleUpdateExpense(index, "name", val)}
                         autoFocus
-                        textAlign={isRTL ? 'right' : 'left'}
+                        textAlign={isRTL ? "right" : "left"}
                       />
                     ) : (
                       <Text style={[styles.expenseName, { color: colors.text }, isRTL && styles.textRTL]}>
@@ -211,7 +189,7 @@ export function BatchExpenseReview({
                         value={Math.abs(exp.amount).toString()}
                         onChangeText={(val) => {
                           const num = parseFloat(val) || 0;
-                          handleUpdateExpense(index, 'amount', -Math.abs(num));
+                          handleUpdateExpense(index, "amount", -Math.abs(num));
                         }}
                         keyboardType="decimal-pad"
                       />
@@ -221,7 +199,7 @@ export function BatchExpenseReview({
                       </Text>
                     )}
                     {exp.confidence && exp.confidence < 0.7 && (
-                      <View style={[styles.warningBadge, { backgroundColor: colors.warning + '20' }]}>
+                      <View style={[styles.warningBadge, { backgroundColor: colors.warning + "20" }]}>
                         <Ionicons name="warning" size={12} color={colors.warning} />
                         <Text style={[styles.warningText, { color: colors.warning }]}>Uncertain</Text>
                       </View>
@@ -229,70 +207,61 @@ export function BatchExpenseReview({
                   </View>
                 </View>
 
-              {/* Category Picker when editing */}
-              {editingIndex === index && config?.categories && (
-                <View style={styles.categoryPicker}>
-                  <Text style={[styles.pickerLabel, { color: colors.textSecondary }]}>Category:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.categoryChips}>
-                      {config.categories.map((cat) => (
-                        <TouchableOpacity
-                          key={cat}
-                          style={[
-                            styles.categoryChip,
-                            { backgroundColor: colors.surfaceSecondary },
-                            exp.category === cat && { backgroundColor: colors.primary },
-                          ]}
-                          onPress={() => handleCategoryChange(index, cat)}
-                        >
-                          <Text
+                {/* Category Picker when editing */}
+                {editingIndex === index && config?.categories && (
+                  <View style={styles.categoryPicker}>
+                    <Text style={[styles.pickerLabel, { color: colors.textSecondary }]}>Category:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View style={styles.categoryChips}>
+                        {config.categories.map((cat) => (
+                          <TouchableOpacity
+                            key={cat}
                             style={[
-                              styles.categoryChipText,
-                              { color: exp.category === cat ? '#fff' : colors.text },
+                              styles.categoryChip,
+                              { backgroundColor: colors.surfaceSecondary },
+                              exp.category === cat && { backgroundColor: colors.primary },
                             ]}
+                            onPress={() => handleCategoryChange(index, cat)}
                           >
-                            {cat}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
-              )}
+                            <Text
+                              style={[styles.categoryChipText, { color: exp.category === cat ? "#fff" : colors.text }]}
+                            >
+                              {cat}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </ScrollView>
+                  </View>
+                )}
 
-              {/* Actions */}
-              <View style={styles.expenseActions}>
-                <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: colors.surfaceSecondary }]}
-                  onPress={() => handleEdit(index)}
-                >
-                  <Ionicons
-                    name={editingIndex === index ? 'checkmark' : 'pencil'}
-                    size={16}
-                    color={colors.primary}
-                  />
-                  <Text style={[styles.actionText, { color: colors.primary }]}>
-                    {editingIndex === index ? 'Done' : 'Edit'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: colors.danger + '15' }]}
-                  onPress={() => handleRemove(index)}
-                >
-                  <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                  <Text style={[styles.actionText, { color: colors.danger }]}>Remove</Text>
-                </TouchableOpacity>
+                {/* Actions */}
+                <View style={styles.expenseActions}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: colors.surfaceSecondary }]}
+                    onPress={() => handleEdit(index)}
+                  >
+                    <Ionicons name={editingIndex === index ? "checkmark" : "pencil"} size={16} color={colors.primary} />
+                    <Text style={[styles.actionText, { color: colors.primary }]}>
+                      {editingIndex === index ? "Done" : "Edit"}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: colors.danger + "15" }]}
+                    onPress={() => handleRemove(index)}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                    <Text style={[styles.actionText, { color: colors.danger }]}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
             );
           })}
 
           {expenses.length === 0 && (
             <View style={styles.emptyState}>
               <Ionicons name="receipt-outline" size={48} color={colors.textTertiary} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                All expenses removed
-              </Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>All expenses removed</Text>
             </View>
           )}
         </ScrollView>
@@ -301,17 +270,10 @@ export function BatchExpenseReview({
         <View style={[styles.footer, { borderTopColor: colors.border }]}>
           <View style={styles.totalRow}>
             <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>Total:</Text>
-            <Text style={[styles.totalAmount, { color: colors.text }]}>
-              {formatCurrency(totalAmount, currency)}
-            </Text>
+            <Text style={[styles.totalAmount, { color: colors.text }]}>{formatCurrency(totalAmount, currency)}</Text>
           </View>
-          <Button
-            onPress={handleSaveAll}
-            loading={isSubmitting}
-            disabled={expenses.length === 0}
-            fullWidth
-          >
-            {`Save ${expenses.length} Expense${expenses.length !== 1 ? 's' : ''}`}
+          <Button onPress={handleSaveAll} loading={isSubmitting} disabled={expenses.length === 0} fullWidth>
+            {`Save ${expenses.length} Expense${expenses.length !== 1 ? "s" : ""}`}
           </Button>
         </View>
       </SafeAreaView>
@@ -324,9 +286,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
@@ -334,12 +296,12 @@ const styles = StyleSheet.create({
   closeButton: {
     width: 40,
     height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
     fontSize: fontSize.lg,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   transcriptBox: {
     margin: spacing.md,
@@ -352,7 +314,7 @@ const styles = StyleSheet.create({
   },
   transcriptText: {
     fontSize: fontSize.sm,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
   list: {
     flex: 1,
@@ -367,20 +329,20 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   expenseHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   expenseMain: {
     flex: 1,
   },
   expenseName: {
     fontSize: fontSize.base,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   nameInput: {
     fontSize: fontSize.base,
-    fontWeight: '600',
+    fontWeight: "600",
     borderBottomWidth: 1,
     paddingVertical: spacing.xs,
     marginBottom: spacing.xs,
@@ -390,23 +352,23 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   expenseRight: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   expenseAmount: {
     fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   amountInput: {
     fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontWeight: "700",
     borderBottomWidth: 1,
     paddingVertical: spacing.xs,
-    textAlign: 'right',
+    textAlign: "right",
     minWidth: 80,
   },
   warningBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingHorizontal: spacing.xs,
     paddingVertical: 2,
@@ -415,7 +377,7 @@ const styles = StyleSheet.create({
   },
   warningText: {
     fontSize: fontSize.xs,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   categoryPicker: {
     marginTop: spacing.sm,
@@ -425,7 +387,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   categoryChips: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: spacing.xs,
   },
   categoryChip: {
@@ -435,16 +397,16 @@ const styles = StyleSheet.create({
   },
   categoryChipText: {
     fontSize: fontSize.xs,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   expenseActions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: spacing.sm,
     marginTop: spacing.md,
   },
   actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
@@ -452,10 +414,10 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: fontSize.sm,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   emptyState: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: spacing.xl,
   },
   emptyText: {
@@ -467,9 +429,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: spacing.md,
   },
   totalLabel: {
@@ -477,20 +439,20 @@ const styles = StyleSheet.create({
   },
   totalAmount: {
     fontSize: fontSize.xl,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   // RTL styles for Arabic/Hebrew/Persian text
   expenseHeaderRTL: {
-    flexDirection: 'row-reverse',
+    flexDirection: "row-reverse",
   },
   expenseMainRTL: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   expenseLeftRTL: {
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
   },
   textRTL: {
-    textAlign: 'right',
-    writingDirection: 'rtl',
+    textAlign: "right",
+    writingDirection: "rtl",
   },
 });

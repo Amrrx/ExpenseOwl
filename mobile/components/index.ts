@@ -8,3 +8,4 @@ export { Loading } from './Loading';
 export { SyncIndicator } from './SyncIndicator';
 export { VoiceRecorder } from './VoiceRecorder';
 export { BatchExpenseReview } from './BatchExpenseReview';
+export { ReceiptScanner } from './ReceiptScanner';

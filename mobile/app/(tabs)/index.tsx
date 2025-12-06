@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { PieChart, BarChart } from 'react-native-gifted-charts';
 import { useTheme, spacing, fontSize, chartColors } from '../../theme';
-import { Card, FAB, ExpenseForm, SyncIndicator, VoiceRecorder, BatchExpenseReview } from '../../components';
+import { Card, FAB, ExpenseForm, SyncIndicator, VoiceRecorder, BatchExpenseReview, ReceiptScanner } from '../../components';
 import { api } from '../../services/api';
 import { useToastStore } from '../../stores/toastStore';
 import { useSyncStore } from '../../stores/syncStore';
@@ -42,7 +42,9 @@ export default function DashboardScreen() {
   const [chartView, setChartView] = useState(0);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [showReceiptScanner, setShowReceiptScanner] = useState(false);
   const [isParsingVoice, setIsParsingVoice] = useState(false);
+  const [isParsingReceipt, setIsParsingReceipt] = useState(false);
   const [parsedExpenseData, setParsedExpenseData] = useState<Partial<Expense> | null>(null);
   const [showBatchReview, setShowBatchReview] = useState(false);
   const [batchExpenses, setBatchExpenses] = useState<Array<{ name: string; amount: number; category: string; date: string; confidence?: number }>>([]);
@@ -184,6 +186,35 @@ export default function DashboardScreen() {
     hapticLight();
     setParsedExpenseData(null);
     setShowExpenseForm(true);
+  };
+
+  const handleCameraPress = () => {
+    hapticLight();
+    setShowReceiptScanner(true);
+  };
+
+  const handleReceiptParsed = (
+    expense: { name: string; amount: number; category: string; date: string; confidence: number },
+    _merchant: string,
+    _items: Array<{ description: string; quantity: number; amount: number }>
+  ) => {
+    const validCategory = config?.categories.includes(expense.category)
+      ? expense.category
+      : config?.categories[0] || 'Miscellaneous';
+
+    setParsedExpenseData({
+      name: expense.name,
+      amount: expense.amount,
+      category: validCategory,
+      date: expense.date,
+    });
+    hapticSuccess();
+    setShowExpenseForm(true);
+  };
+
+  const handleReceiptError = (message: string) => {
+    hapticError();
+    toast.error(message);
   };
 
   const startDate = config?.startDate || 1;
@@ -459,12 +490,12 @@ export default function DashboardScreen() {
       </ScrollView>
 
       {/* Processing Overlay */}
-      {isParsingVoice && (
+      {(isParsingVoice || isParsingReceipt) && (
         <View style={styles.processingOverlay}>
           <View style={[styles.processingCard, { backgroundColor: colors.surface }]}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.processingText, { color: colors.text }]}>
-              Processing your voice...
+              {isParsingReceipt ? 'Scanning receipt...' : 'Processing your voice...'}
             </Text>
             <Text style={[styles.processingSubtext, { color: colors.textSecondary }]}>
               This may take a moment
@@ -473,12 +504,21 @@ export default function DashboardScreen() {
         </View>
       )}
 
+      <FAB icon="camera" onPress={handleCameraPress} style={{ bottom: 88 }} />
       <FAB icon="mic" onPress={handleFabPress} />
 
       <VoiceRecorder
         visible={showVoiceRecorder}
         onClose={() => setShowVoiceRecorder(false)}
         onRecordingComplete={handleVoiceRecording}
+      />
+
+      <ReceiptScanner
+        visible={showReceiptScanner}
+        onClose={() => setShowReceiptScanner(false)}
+        onReceiptParsed={handleReceiptParsed}
+        onError={handleReceiptError}
+        parseReceipt={api.parseReceiptImage.bind(api)}
       />
 
       <ExpenseForm

@@ -713,6 +713,113 @@ func (h *PostgresHandler) ParseVoiceExpenseBase64(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, response)
 }
 
+// ParseReceiptExpense handles receipt image parsing with JSON base64 encoded image
+func (h *PostgresHandler) ParseReceiptExpense(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store, err := h.getUserStorage(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Check if AI is enabled
+	aiConfig, err := store.GetAIConfig()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get AI config"})
+		log.Printf("API ERROR: Failed to get AI config: %v\n", err)
+		return
+	}
+
+	if !aiConfig.Enabled {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "AI features are not enabled. Please configure AI settings first."})
+		return
+	}
+
+	if aiConfig.APIKey == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "AI API key not configured"})
+		return
+	}
+
+	// Parse JSON request with base64 image
+	var req struct {
+		ImageData string `json:"imageData"`
+		MIMEType  string `json:"mimeType"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	if req.ImageData == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Image data is required"})
+		return
+	}
+
+	// Default MIME type to JPEG if not specified
+	mimeType := req.MIMEType
+	if mimeType == "" {
+		mimeType = "image/jpeg"
+	}
+
+	imageBytes, err := base64.StdEncoding.DecodeString(req.ImageData)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid base64 image data"})
+		return
+	}
+
+	// Get user's categories and currency
+	categories, err := store.GetCategories()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get categories"})
+		log.Printf("API ERROR: Failed to get categories: %v\n", err)
+		return
+	}
+
+	currency, err := store.GetCurrency()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get currency"})
+		log.Printf("API ERROR: Failed to get currency: %v\n", err)
+		return
+	}
+
+	// Create AI provider
+	provider, err := ai.NewProvider(ai.ProviderType(aiConfig.Provider), aiConfig.APIKey, aiConfig.Model)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to create AI provider: %v", err)})
+		log.Printf("API ERROR: Failed to create AI provider: %v\n", err)
+		return
+	}
+
+	// Parse receipt image
+	parseReq := ai.ReceiptParseRequest{
+		ImageData:          imageBytes,
+		ImageMIMEType:      mimeType,
+		Categories:         categories,
+		Currency:           currency,
+		Today:              time.Now(),
+		TranslateToEnglish: aiConfig.TranslateToEnglish,
+	}
+
+	response, err := provider.ParseReceiptImage(parseReq)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to parse receipt: %v", err)})
+		log.Printf("API ERROR: Failed to parse receipt: %v\n", err)
+		return
+	}
+
+	// Return parsed expense for review
+	writeJSON(w, http.StatusOK, response)
+	if response.Expense != nil {
+		log.Printf("HTTP: Successfully parsed receipt from %s for %.2f\n", response.Merchant, response.Expense.Amount)
+	} else {
+		log.Printf("HTTP: Receipt parsing returned no expense (message: %s)\n", response.Message)
+	}
+}
+
 // maskAPIKey masks an API key for display
 func maskAPIKey(key string) string {
 	if len(key) <= 8 {

@@ -29,12 +29,42 @@
 
 ## Priority 4 - Agentic Features
 - [x] Batch voice parsing (multiple expenses from one recording)
-- [ ] Receipt photo scanning (camera → AI extracts merchant, amount, date, category)
+- [x] Receipt photo scanning (camera → AI extracts merchant, amount, date, category)
 - [ ] Natural language queries ("How much did I spend on food this month?")
 - [ ] Quick expense templates (tap to log frequent expenses)
 - [ ] Smart suggestions ("Add as recurring?" for weekly patterns)
 - [ ] AI spending insights (weekly summary with trends)
 - [ ] Anomaly alerts ("Unusual expense detected")
+
+## Zero-Friction Capture (Goal: minimum effort expense logging)
+
+### Clear - Ready to Implement
+- [ ] Home screen widget (voice + camera buttons - add expense without opening app)
+- [ ] Minimal form mode (only amount required, auto-detect category from time/patterns)
+- [ ] Share Sheet integration (receive shared images from other apps → parse as receipt)
+- [ ] Text paste input (paste any text → AI extracts expense details)
+
+### Discussion Needed
+- [ ] **Notification Listener (Android)** - Capture banking app notifications passively
+  - Needs: Research Expo support, native module requirements
+  - Pro: Zero friction, real-time capture
+  - Con: Android only, may need ejecting from Expo
+- [ ] **SMS Parsing (Android)** - Read bank transaction SMS
+  - Needs: READ_SMS permission, Play Store policy review
+  - Pro: Works offline, catches all bank SMS
+  - Con: Sensitive permission, privacy concerns, bank format varies
+- [ ] **Bank API Integration (Plaid/Open Banking)** - Direct transaction sync
+  - Needs: Plaid account (~$0.50/connection), regulatory compliance
+  - Pro: Highest accuracy, automatic sync
+  - Con: Cost, complexity, not all banks supported
+- [ ] **Email Parsing** - Scan inbox for receipt emails
+  - Needs: OAuth email access, email provider integration
+  - Pro: Catches online purchases automatically
+  - Con: Privacy concerns, complex parsing
+- [ ] **Voice Assistant Integration** - "Hey Siri/Google, log expense 15 dollars for lunch"
+  - Needs: Siri Shortcuts (iOS), Google Assistant Actions
+  - Pro: Hands-free, works without opening app
+  - Con: Platform-specific implementation
 
 ## Priority 5 - Data & Analytics
 - [x] Donut chart with center total (replaced pie chart)

@@ -9,13 +9,13 @@
 </p>
 
 <p align="center">
-<a href="#why-create-this">Why Create This?</a>&nbsp;&bull;&nbsp;<a href="#features">Features</a>&nbsp;&bull;&nbsp;<a href="#screenshots">Screenshots</a><br><a href="#installation">Installation</a>&nbsp;&bull;&nbsp;<a href="#usage">Usage</a>&nbsp;&bull;&nbsp;<a href="#contributing">Contributing</a>
+<a href="#why-create-this">Why Create This?</a>&nbsp;&bull;&nbsp;<a href="#features">Features</a>&nbsp;&bull;&nbsp;<a href="#architecture">Architecture</a><br><a href="#installation">Installation</a>&nbsp;&bull;&nbsp;<a href="#usage">Usage</a>&nbsp;&bull;&nbsp;<a href="#contributing">Contributing</a>
 </p>
 
 <br>
 
 <p align="center">
-<b>ExpenseOwl</b> is an extremely simple self-hosted expense tracking system with a modern monthly pie-chart visualization and cashflow showcase.
+<b>ExpenseOwl</b> is a self-hosted expense tracking system with a React Native mobile app and Go backend API. Supports single-user (homelab) and multi-user (with authentication) modes.
 </p>
 
 <br>
@@ -31,63 +31,75 @@ So, I created this project and I use it in my home lab for expenses. The primary
 ### Core Functionality
 
 - Quick expense/income add (only date, amount, and category are required)
-- Single-user focused (mainly for a home lab deployment)
+- **Two modes**: Single-user (JSON storage) or Multi-user (PostgreSQL + authentication)
 - Recurring transactions for both income and expenses
-- Custom categories, currency symbols, and start date via app settings
+- Custom categories, currency symbols, and billing cycle start date
 - Optional tags for further classification
 - Beautiful interface with both light and dark themes
-- Self-contained binary and container image to ensure no internet interaction
-- Multi-architecture Docker container with support for persistent storage
-- PWA support for using the app on smartphone
+- Voice expense entry with AI parsing (Gemini, OpenAI, Anthropic)
+- Multi-architecture Docker container with persistent storage
+
+### Mobile App (React Native)
+
+- Native mobile experience for iOS and Android
+- Offline-first with background sync
+- Voice recording for quick expense entry
+- RTL support for Arabic/Hebrew expense names
+- Haptic feedback for better UX
+
+### Authentication (Multi-User Mode)
+
+- JWT-based authentication with refresh tokens
+- OAuth support (Google, Apple)
+- Per-user data isolation
+- User preferences (translation settings)
 
 ### Visualization
 
 1. Main dashboard - category breakdown (pie chart) and cashflow indicator
-    - Click on a category to exclude it from the pie chart; click again to add it back
+    - Click on a category to exclude it from the pie chart
     - Visualize the month's breakdown without considering some categories like Rent
-    - Cashflow shows total income, total expenses, and balance (red or green based on +ve or -ve)
+    - Cashflow shows total income, total expenses, and balance
 2. Table view for detailed expense listing
-    - View monthly or all expenses chronologically and delete them (hold shift to skip confirm)
-    - Use the browser to search for a name or tags if needed
-    - Tags show up if at least one transaction uses it; 
-3. Settings page for configurations and additional features
-    - Reorder, add, or remove custom categories
-    - Select a custom currency symbol and a custom start date
-    - Exporting data as CSV and import CSV from virtually anywhere
+    - View monthly or all expenses chronologically
+    - Edit and delete expenses
+3. Settings page for configurations
+    - Manage categories, currency, and billing cycle
+    - Configure voice input preferences
 
-### Progressive Web App (PWA)
+# Architecture
 
-The front end of ExpenseOwl can be installed as a Progressive Web App on desktop and mobile devices (i.e., the back end still needs to be self-hosted). To install:
-
-- Desktop: Click the install icon in your browser's address bar
-- iOS: Use Safari's "Add to Home Screen" option in the share menu
-- Android: Use Chrome's "Install" option in the menu
-
-# Screenshots
-
-Dashboard Showcase:
-
-| | Desktop View | Mobile View |
-| --- | --- | --- |
-| Dark | <img src="/assets/ddark-main.png" alt="Dashboard Dark" /> | <img src="/assets/mdark-main.png" alt="Mobile Dashboard Dark" /> |
-| Light | <img src="/assets/dlight-main.png" alt="Dashboard Light" /> | <img src="/assets/mlight-main.png" alt="Mobile Dashboard Light" /> |
-
-<details>
-<summary>Expand this to see screenshots of other pages</summary>
-
-| | Desktop View | Mobile View |
-| --- | --- | --- |
-| Table Dark | <img src="/assets/ddark-table.png" alt="Dashboard Dark" /> | <img src="/assets/mdark-table.png" alt="Mobile Dashboard Dark" /> |
-| Table Light | <img src="/assets/dlight-table.png" alt="Dashboard Light" /> | <img src="/assets/mlight-table.png" alt="Mobile Dashboard Light" /> |
-| Settings Dark | <img src="/assets/ddark-settings.png" alt="Table Dark" /> | <img src="/assets/mdark-settings.png" alt="Mobile Table Dark" /> |
-| Settings Light | <img src="/assets/dlight-settings.png" alt="Table Light" /> | <img src="/assets/mlight-settings.png" alt="Mobile Table Light" /> |
-
-</details>
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    React Native App                          │
+│              (iOS, Android, Web via Expo)                    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Go Backend API                           │
+│              (Pure API - no UI serving)                      │
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ Auth/JWT    │  │ Sync API    │  │ Voice/AI Parsing    │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+┌─────────────────────────┐    ┌─────────────────────────────┐
+│   JSON Files            │    │   PostgreSQL                │
+│   (Single-User Mode)    │    │   (Multi-User Mode)         │
+└─────────────────────────┘    └─────────────────────────────┘
+```
 
 # Installation
 
-The recommended installation method is Docker. To run the container via CLI, use the following command:
+## Backend
 
+### Docker (Recommended)
+
+**Single-User Mode** (JSON storage, no auth):
 ```bash
 docker run --rm -d \
   --name expenseowl \
@@ -96,132 +108,171 @@ docker run --rm -d \
   tanq16/expenseowl:main
 ```
 
-To use Docker compose, use this YAML definition:
-
+**Multi-User Mode** (PostgreSQL + auth):
 ```yaml
 services:
   expenseowl:
     image: tanq16/expenseowl:main
+    command: ["--auth"]
     restart: unless-stopped
     ports:
-      - 5006:8080 # change 5006 to what you want to expose on
+      - 8080:8080
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=expenseowl
+      - DB_PASSWORD=your-password
+      - DB_NAME=expenseowl
+      - DB_SSLMODE=disable
+      - JWT_SECRET=your-random-secret-key
+      - JWT_ACCESS_TOKEN_EXPIRY=15m
+      - JWT_REFRESH_TOKEN_EXPIRY=7d
+      # Optional: AI Voice Parsing
+      - AI_ENABLED=true
+      - AI_PROVIDER=gemini
+      - AI_API_KEY=your-api-key
+      - AI_MODEL=gemini-2.5-flash-lite
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=expenseowl
+      - POSTGRES_PASSWORD=your-password
+      - POSTGRES_DB=expenseowl
     volumes:
-      - /home/tanq/expenseowl:/app/data # change dir as needed
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
 ```
 
-<details>
-<summary>Expand this to see additional execution options</summary>
-
-### Using the Binary or Building from Source
-
-Download the appropriate binary from the project releases. The binary automatically sets up a `data` directory in your CWD, and starts the app at `http://localhost:8080`.
-
-To build the binary yourself:
+### Binary
 
 ```bash
-git clone https://github.com/tanq16/expenseowl.git && \
-cd expenseowl && \
+# Download from releases or build from source
+git clone https://github.com/tanq16/expenseowl.git
+cd expenseowl
 go build ./cmd/expenseowl
+
+# Run single-user mode
+./expenseowl
+
+# Run multi-user mode (requires PostgreSQL)
+./expenseowl --auth
 ```
 
-### Kubernetes Deployment
+## Mobile App
 
-This is a community-contributed Kubernetes spec. Treat it as a sample and review before deploying to your cluster. Read the [associated readme](./kubernetes/README.md) for more information.
+The React Native mobile app is located in the `mobile/` directory:
 
-</details>
+```bash
+cd mobile
+npm install
+
+# Set API URL
+export EXPO_PUBLIC_API_URL=https://your-api.com
+
+# Run on device/emulator
+npx expo run:android
+npx expo run:ios
+
+# Run web version
+npx expo start --web
+```
 
 # Usage
 
-Once deployed, use the web interface to do everything. Access it through your browser:
+## Single-User Mode
 
-- Dashboard: `http://localhost:8080/`
-- Table View: `http://localhost:8080/table`
-- Settings: `http://localhost:8080/settings`
+Access the API directly at `http://localhost:8080`. No authentication required.
 
-> [!NOTE]
-> This app does not include authentication, so deploy carefully. I don't want to add half-baked authentication, so use Authelia, or equivalent as needed. ExpenseOwl works well with a reverse proxy like Nginx Proxy Manager too and is intended for homelab use only.
+## Multi-User Mode
 
-### Conventions
+1. Register an account via the mobile app or API
+2. Login to receive JWT tokens
+3. Use Bearer token for all API requests
 
-Since writing the app, I've found a ton of ways applications handle expenses. Release v4.0 solidifies the conventions I will continue to maintain the app in.
+### API Authentication Flow
 
-- Expenses are categorized by a -ve value, while income or reimbursement (designated by the `Report as gain` checkbox) are +ve
-- Expense dates are stored as UTC strings in RFC3339 format, however, the frontend hides the time value from the user; users are meant to select a date, and the current local time is automatically added to the given date
-- Future and recurring expenses extending into future dates are added immediately to the backend
-- The primary way to use ExpenseOwl is to quick review the month's stats via the pie chart - this allows users to make a mental note and soft decision of where to spend money, without the effort of maintaining a budget
-- Categories are meant to be used as a classification criteria - example, how much did I spend on food, groceries, and utilities, etc.
-- Tags are optional and are meant to assign features and characteristics to expenses.
+```bash
+# Register
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password","full_name":"User"}'
 
-> [!NOTE]
-> While these conventions can change during the project's lifecycle, largely, the intention (stemming from the motivation to build ExpenseOwl) behind simple, manual, easy tracking will not change.
+# Login
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password"}'
 
-### Configuration Options
+# Use token for protected endpoints
+curl http://localhost:8080/api/expenses \
+  -H "Authorization: Bearer <access_token>"
+```
 
-With the exception of [Data backends](#data-backends), all configuration of ExpenseOwl happens via the application UI. The list of all such options available via the settings page (`/settings` endpoint) is as follows:
+## Conventions
 
-- Category Settings:
-- Currency Symbol:
-  - This is a frontend symbol configuration on what symbol to use to show amount values
-  - Each currency has its default behavior for using `,` or `.` as separators (and if it uses decimals or not)
-- Start Date:
-  - This is a custom day of the month from when the expenses will be displayed
-  - Example: setting it to 5 means, expenses for each month will be counted from 5th to next month's 4th
-- Recurring Transactions:
-  - A recurring transaction can be for an expense or an income (gain)
-  - Given a value for number of occurences and a start date, the app will add the transactions accordingly
-  - Recurring transactions will be listed at the bottom of the page and can be edited/removed (all or future only transactions)
-  - Recurring transactions allow similar options as normal expenses - category, tags, amount, name
-- Theme Settings: supports light and dark theme, with default behavior to adapt to system
-- Import/Export Data: covered under [Data Import/Export](#data-importexport)
+- Expenses are categorized by a -ve value, while income or reimbursement are +ve
+- Expense dates are stored as UTC strings in RFC3339 format
+- Future and recurring expenses extending into future dates are added immediately
+- Categories are meant to be used as a classification criteria
+- Tags are optional and are meant to assign features and characteristics to expenses
 
-### Data Backends
+## Environment Variables
 
-ExpenseOwl supports two data backends - JSON (default), and Postgres. Postgres was added with v4.0 of the app primarily for homelabbers to reuse their Postgres instances as needed for better backup compatibility.
+### Database (Multi-User Mode)
 
-Ideally, you need not configure anything differently for the JSON backend. ExpenseOwl automatically creates the data directory and the `.json` files. You may, however, want to mount a specific volume to `/app/data` within the container for persistence.
+| Variable | Description |
+|----------|-------------|
+| `DB_HOST` | PostgreSQL host |
+| `DB_PORT` | PostgreSQL port (default: 5432) |
+| `DB_USER` | Database user |
+| `DB_PASSWORD` | Database password |
+| `DB_NAME` | Database name |
+| `DB_SSLMODE` | SSL mode: disable, require, verify-full, verify-ca |
 
-For configuring Postgres, use the following environment variables:
+### Authentication
 
-| Variable | Sample Value | Details |
-| --- | --- | --- |
-| STORAGE_TYPE | postgres | defaults to `json`, hence JSON backend is default |
-| STORAGE_URL | "localhost:5432/expenseowldb" | format - SERVER/DB - the sslmode value is set by the next variable |
-| STORAGE_SSL | require | can be one of `disable` (default), `verify-full`, `verify-ca`, or `require` |
-| STORAGE_USER | testuser | the user to authenticate with your Postgres instance |
-| STORAGE_PASS | testpassword | the password for the Postgres user |
+| Variable | Description |
+|----------|-------------|
+| `JWT_SECRET` | Secret key for signing JWTs |
+| `JWT_ACCESS_TOKEN_EXPIRY` | Access token expiry (e.g., 15m) |
+| `JWT_REFRESH_TOKEN_EXPIRY` | Refresh token expiry (e.g., 7d) |
 
-The app has been tested with SSL mode for Postgres set to disable for simplicity.
+### AI Voice Parsing (Optional)
 
-> [!TIP]
-> The environment variables can be set for using `-e` in the command line or `environment` in a compose stack.
+| Variable | Description |
+|----------|-------------|
+| `AI_ENABLED` | Enable AI features (true/false) |
+| `AI_PROVIDER` | Provider: gemini, openai, anthropic |
+| `AI_API_KEY` | API key for the provider |
+| `AI_MODEL` | Model to use |
 
-> [!TIP]
-> Having learnt more Go, I introduced the Storage interface in v4.0, making it easy to add any storage backend by simply implementing the interface.
+### OAuth (Optional)
 
-### Data Import/Export
+| Variable | Description |
+|----------|-------------|
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `APPLE_CLIENT_ID` | Apple OAuth client ID |
+| `APPLE_TEAM_ID` | Apple Team ID |
+| `APPLE_KEY_ID` | Apple Key ID |
+| `APPLE_PRIVATE_KEY_PATH` | Path to Apple private key |
 
-ExpenseOwl is meant to make things simple, and importing CSV abides by the same philosophy. ExpenseOwl will accept any CSV file as long as it contains the columns - `name`, `category`, `amount`, and `date`. This is case-insensitive so `name` or `Name` doesn't matter.
+## Data Import/Export
 
-> [!TIP]
-> This feature allows ExpenseOwl to use exported data from any tool as long as the required categories are present, making it insanely easy to shift from any provider.
+ExpenseOwl accepts any CSV file with columns: `name`, `category`, `amount`, and `date` (case-insensitive).
 
-> [!WARNING]
-> The recommended format for the date is RFC3339. Additionally, ExpenseOwl can ingest several other time formats, including a short, human written date like `2012/8/14` (14th August 2012).
-> HOWEVER !!!
-> ExpenseOwl only ingests date in YYYY-MM-DD (this order). ExpenseOwl does NOT deal with MM/DD or DD/MM. Full 4 digit year comes first, followed by month, and lastly the date.
-
-> [!NOTE]
-> ExpenseOwl goes through every row in the imported data, and will intelligently fail on rows that have invalid or absent data. There is a 10 millisecond delay per record to reduce disk/db overhead, so please allow appropriate time for ingestion (eg. ~10 seconds for 1000 records).
-
-Data exported as CSV will include expense IDs, so when importing the same CSV file, IDs will be maintained and skipped appropriately.
-
-An `Import from ExpenseOwl v3.2-` will be present for v4.X to allow pulling in data from past releases.
+> **Note**: Date format should be YYYY-MM-DD or RFC3339.
 
 # Contributing
 
-Contributions are welcome; please ensure they align with the project's philosophy of maintaining simplicity by strictly using the current tech stack (Go for backend; HTML, CSS, JS for frontend). It is intended for home lab use, i.e., a self-hosted first approach (containerized use). Consider the following:
+Contributions are welcome! The project uses:
 
-- Additions should have sensible defaults without breaking foundations
-- Environment variables can be used for system configuration in container and binary
-- Found a typo or need to ask a question? Please open an issue instead of a PR
-- To add a new backend type (say SQL, NocoDB, etc.), a new file can be added in the backend that implements the Storage interface
+- **Backend**: Go (pure API server)
+- **Mobile**: React Native with Expo
+- **Database**: PostgreSQL (multi-user) or JSON files (single-user)
+
+Please ensure contributions align with the project's philosophy of maintaining simplicity.

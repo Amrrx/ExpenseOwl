@@ -76,10 +76,11 @@ func runServer(port int) {
 	http.HandleFunc("/import/csvold", handler.ImportOldCSV)
 
 	// Voice & AI
-	http.HandleFunc("/voice/parse", handler.ParseVoiceExpense)     // POST voice to get parsed expenses
-	http.HandleFunc("/settings/ai", handler.GetAIConfig)           // GET AI config
-	http.HandleFunc("/settings/ai/update", handler.UpdateAIConfig) // PUT AI config
-	http.HandleFunc("/settings/ai/test", handler.TestAIConnection) // POST test AI connection
+	http.HandleFunc("/voice/parse", handler.ParseVoiceExpense)       // POST voice to get parsed expenses
+	http.HandleFunc("/receipt/parse", handler.ParseReceiptExpense)   // POST receipt image to get parsed expense
+	http.HandleFunc("/settings/ai", handler.GetAIConfig)             // GET AI config
+	http.HandleFunc("/settings/ai/update", handler.UpdateAIConfig)   // PUT AI config
+	http.HandleFunc("/settings/ai/test", handler.TestAIConnection)   // POST test AI connection
 
 	log.Println("Starting server on port", port, "...")
 	if err := http.ListenAndServe(fmt.Sprint(":", port), nil); err != nil {
@@ -180,6 +181,7 @@ func runAuthServer(port int) {
 
 	// Voice & AI (internal - not for mobile clients)
 	http.Handle("/api/ai/voice/parse", authMiddleware(http.HandlerFunc(pgHandler.ParseVoiceExpense)))
+	http.Handle("/api/ai/receipt/parse", authMiddleware(http.HandlerFunc(pgHandler.ParseReceiptExpense)))
 	http.Handle("/api/ai/config", authMiddleware(http.HandlerFunc(pgHandler.GetAIConfig)))
 	http.Handle("/api/ai/config/update", authMiddleware(http.HandlerFunc(pgHandler.UpdateAIConfig)))
 	http.Handle("/api/ai/test", authMiddleware(http.HandlerFunc(pgHandler.TestAIConnection)))

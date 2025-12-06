@@ -23,7 +23,7 @@
         "backgroundColor": "#f9fafb"
       },
       "package": "com.xpense.app",
-      "permissions": ["RECORD_AUDIO"]
+      "permissions": ["RECORD_AUDIO", "CAMERA", "READ_EXTERNAL_STORAGE"]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -37,6 +37,13 @@
         "expo-av",
         {
           "microphonePermission": "Allow Xpense to access your microphone for voice expense entry."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Xpense to access your photos to scan receipts.",
+          "cameraPermission": "Allow Xpense to use your camera to scan receipts."
         }
       ]
     ]
