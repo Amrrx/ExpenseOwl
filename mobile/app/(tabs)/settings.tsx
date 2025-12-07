@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
 import { useTheme, spacing, fontSize, borderRadius } from '../../theme';
 import { Card, Button } from '../../components';
 import { api } from '../../services/api';
@@ -73,7 +74,7 @@ function ThemeSection() {
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
-  const { user, logout } = useAuthStore();
+  const { user, logout, isAuthenticated } = useAuthStore();
   const toast = useToastStore();
 
   const [config, setConfig] = useState<Config | null>(null);
@@ -101,8 +102,9 @@ export default function SettingsScreen() {
   }, [toast]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     loadConfig();
-  }, [loadConfig]);
+  }, [isAuthenticated, loadConfig]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -379,7 +381,7 @@ export default function SettingsScreen() {
 
         {/* Version */}
         <Text style={[styles.version, { color: colors.textTertiary }]}>
-          Xpense v1.0.0
+          Clink v{Constants.expoConfig?.version || '1.0.0'}
         </Text>
       </ScrollView>
     </SafeAreaView>

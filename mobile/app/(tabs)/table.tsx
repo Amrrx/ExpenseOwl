@@ -15,6 +15,7 @@ import { useTheme, spacing, fontSize, borderRadius } from '../../theme';
 import { Card, FAB, ExpenseForm } from '../../components';
 import { api } from '../../services/api';
 import { useToastStore } from '../../stores/toastStore';
+import { useAuthStore } from '../../stores/authStore';
 import { formatCurrency } from '../../utils/currency';
 import { formatDateShort, getMonthBounds, formatMonth } from '../../utils/dates';
 import { hapticSelection, hapticWarning } from '../../utils/haptics';
@@ -23,6 +24,7 @@ import type { Expense, Config } from '../../types';
 export default function TableScreen() {
   const { colors } = useTheme();
   const toast = useToastStore();
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [config, setConfig] = useState<Config | null>(null);
@@ -52,8 +54,9 @@ export default function TableScreen() {
   }, [toast]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     loadData();
-  }, [loadData]);
+  }, [isAuthenticated, loadData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

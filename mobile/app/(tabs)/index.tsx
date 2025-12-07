@@ -12,6 +12,7 @@ import { api } from '../../services/api';
 import { useToastStore } from '../../stores/toastStore';
 import { useSyncStore } from '../../stores/syncStore';
 import { useOfflineStore } from '../../stores/offlineStore';
+import { useAuthStore } from '../../stores/authStore';
 import { formatCurrency, COLOR_PALETTE } from '../../utils/currency';
 import { formatMonth, getMonthBounds, formatDateForInput } from '../../utils/dates';
 import { hapticSelection, hapticSuccess, hapticError, hapticLight } from '../../utils/haptics';
@@ -30,6 +31,7 @@ export default function DashboardScreen() {
   const { colors, isDark } = useTheme();
   const toast = useToastStore();
   const syncStore = useSyncStore();
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   // Only subscribe to isOnline to avoid re-render loops from cached data changes
   const isOnline = useOfflineStore(state => state.isOnline);
   const offlineQueue = useOfflineStore(state => state.offlineQueue);
@@ -53,9 +55,10 @@ export default function DashboardScreen() {
   const [batchTranscript, setBatchTranscript] = useState<string | undefined>();
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     syncStore.initialize();
     useOfflineStore.getState().initialize();
-  }, []);
+  }, [isAuthenticated]);
 
 
   // Check for widget action and shared images on mount and when app comes to foreground
@@ -170,11 +173,12 @@ export default function DashboardScreen() {
   }, [toast]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     if (!hasLoadedRef.current) {
       hasLoadedRef.current = true;
       loadData();
     }
-  }, [loadData]);
+  }, [isAuthenticated, loadData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -384,7 +388,7 @@ export default function DashboardScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.logo, { color: colors.primary }]}>Xpense</Text>
+          <Text style={[styles.logo, { color: colors.primary }]}>Clink</Text>
           <View style={styles.headerActions}>
             <TouchableOpacity onPress={handleManualEntry} style={styles.headerButton}>
               <Ionicons name="add-circle-outline" size={26} color={colors.text} />

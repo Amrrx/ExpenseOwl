@@ -148,16 +148,4 @@ $$ language 'plpgsql';
 CREATE TRIGGER update_expenses_last_modified BEFORE UPDATE ON expenses
     FOR EACH ROW EXECUTE FUNCTION update_expense_last_modified();
 
--- Initial data: Create default admin user (password: 'admin123' - CHANGE IN PRODUCTION)
--- Password hash for 'admin123' using bcrypt
-INSERT INTO users (email, password_hash, full_name, email_verified)
-VALUES (
-    'admin@expenseowl.local',
-    '$2a$10$rKvV9qxJZKKmJ5Z5YhXxhO7qGqYqZqYqZqYqZqYqZqYqZqYqZqY', -- Change this!
-    'Admin User',
-    TRUE
-);
-
--- Create default config for admin
-INSERT INTO user_configs (user_id)
-SELECT id FROM users WHERE email = 'admin@expenseowl.local';
+-- Users register themselves via /api/auth/register

@@ -12,6 +12,7 @@ import (
 	"github.com/tanq16/expenseowl/internal/api"
 	"github.com/tanq16/expenseowl/internal/auth"
 	"github.com/tanq16/expenseowl/internal/config"
+	"github.com/tanq16/expenseowl/internal/database"
 	"github.com/tanq16/expenseowl/internal/logging"
 	"github.com/tanq16/expenseowl/internal/storage"
 )
@@ -118,6 +119,16 @@ func runAuthServer(port int) {
 	}
 
 	logging.Info("database_connected")
+
+	// Run database migrations
+	if err := database.RunMigrations(db); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
+	// Seed initial admin user if no users exist
+	if err := database.SeedInitialUser(db); err != nil {
+		log.Fatalf("Failed to seed initial user: %v", err)
+	}
 
 	// Initialize JWT manager
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTAccessTokenExpiry, cfg.JWTRefreshTokenExpiry)
